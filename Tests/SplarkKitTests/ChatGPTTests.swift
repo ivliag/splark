@@ -71,6 +71,12 @@ import Testing
         #expect(new.needsRefresh(now: start))   // expires in 60 s < 5 min
         #expect(stub.formBody(0)["grant_type"] == "refresh_token")
     }
+
+    @Test func refreshWithoutARefreshTokenSaysSo() async {
+        let creds = ChatGPTCredentials(clientId: "c", hostId: "h", accessToken: "a", refreshToken: nil, idToken: nil,
+                                       expiresAt: Date(timeIntervalSince1970: 0), scopes: [], email: nil, subject: nil)
+        await #expect(throws: ChatGPTAuthError.missingRefreshToken) { try await ChatGPTAuth(transport: StubTransport([])).refresh(creds) }
+    }
 }
 
 @Suite struct OpenAIResponsesTests {
@@ -107,7 +113,7 @@ import Testing
     }
 
     @Test func bodyAlwaysStreamsWithStorageOff() throws {
-        let data = OpenAIClient.responsesBody(model: "m", instructions: "i", input: "x", schemaName: "triage", schema: ["type": "object"])
+        let data = try OpenAIClient.responsesBody(model: "m", instructions: "i", input: "x", schemaName: "triage", schema: ["type": "object"])
         let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(body["stream"] as? Bool == true && body["store"] as? Bool == false)
         #expect(body["instructions"] as? String == "i")
@@ -117,7 +123,7 @@ import Testing
     }
 
     @Test func inputIsSentAsAListWithOneUserMessage() throws {
-        let data = OpenAIClient.responsesBody(model: "m", instructions: "i", input: "hello", schemaName: nil, schema: nil)
+        let data = try OpenAIClient.responsesBody(model: "m", instructions: "i", input: "hello", schemaName: nil, schema: nil)
         let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let input = try #require(body["input"] as? [[String: Any]])
         #expect(input.count == 1)
@@ -129,6 +135,22 @@ import Testing
     @Test func listModelsReadsThePlanShapeAndSkipsHiddenModels() async throws {
         let stub = StubTransport(json: #"{"models":[{"slug":"gpt-6-luna","visibility":"list","supported_in_api":true},{"slug":"codex-auto-review","visibility":"hide","supported_in_api":true},{"slug":"gpt-5.6-luna","visibility":"list","supported_in_api":true},{"slug":"web-only","visibility":"list","supported_in_api":false}]}"#)
         #expect(try await OpenAIClient(transport: stub).listModels(accessToken: "t") == ["gpt-5.6-luna", "gpt-6-luna"])
+    }
+
+    @Test func bodyRejectsASchemaThatIsNotJSON() {
+        #expect(throws: (any Error).self) {
+            try OpenAIClient.responsesBody(model: "m", instructions: "i", input: "x", schemaName: "s", schema: ["bad": Date()])
+        }
+    }
+
+    @Test func respondSplitsTheStreamOnlyOnNewlines() async throws {
+        // U+2028 is legal inside a JSON string. Splitting on it (as AsyncBytes.lines does) would cut the event in half.
+        let sse = "data: {\"type\":\"response.output_text.delta\",\"delta\":\"a\u{2028}b\"}\n\ndata: {\"type\":\"response.completed\"}\n\n"
+        let client = OpenAIClient(streamer: { request in
+            (OpenAIClient.ByteStream { c in for b in Array(sse.utf8) { c.yield(b) }; c.finish() },
+             HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        #expect(try await client.respond(accessToken: "t", model: "m", instructions: "i", input: "x") == "a\u{2028}b")
     }
 
     @Test func listModelsSortsIds() async throws {

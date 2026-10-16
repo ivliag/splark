@@ -16,29 +16,33 @@ public enum SlackAppManifest {
 
     public static func redirectURI(port: UInt16) -> String { "http://localhost:\(port)\(callbackPath)" }
 
-    /// JSON for `apps.manifest.create`. `redirectPort == nil` gives the manual "create from manifest" variant.
-    public static func json(redirectPort: UInt16?) -> String {
-        var oauth: [String: Any] = ["scopes": ["user": userScopes]]
-        if let redirectPort {
-            oauth["redirect_urls"] = [redirectURI(port: redirectPort)]
-            oauth["pkce_enabled"] = true
+    private struct Manifest: Encodable {
+        struct Display: Encodable { let name: String; let description: String }
+        struct OAuth: Encodable {
+            struct Scopes: Encodable { let user: [String] }
+            let scopes: Scopes
+            let redirect_urls: [String]?
+            let pkce_enabled: Bool?
         }
-        let manifest: [String: Any] = [
-            "display_information": [
-                "name": "Splark",
-                "description": "Your private Splark connection. Created by the Splark menu-bar app for your account only.",
-            ],
-            "oauth_config": oauth,
-            "settings": ["org_deploy_enabled": false, "socket_mode_enabled": false, "token_rotation_enabled": false],
-        ]
-        let data = try! JSONSerialization.data(withJSONObject: manifest, options: [.sortedKeys])
-        return String(decoding: data, as: UTF8.self)
+        struct Settings: Encodable { let org_deploy_enabled = false, socket_mode_enabled = false, token_rotation_enabled = false }
+        let display_information = Display(name: "Splark", description: "Your private Splark connection. Created by the Splark menu-bar app for your account only.")
+        let oauth_config: OAuth
+        let settings = Settings()
+    }
+
+    /// JSON for `apps.manifest.create`. `redirectPort == nil` gives the manual "create from manifest" variant.
+    public static func json(redirectPort: UInt16?) throws -> String {
+        let oauth = Manifest.OAuth(scopes: .init(user: userScopes), redirect_urls: redirectPort.map { [redirectURI(port: $0)] },
+                                   pkce_enabled: redirectPort.map { _ in true })
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return String(decoding: try encoder.encode(Manifest(oauth_config: oauth)), as: UTF8.self)
     }
 
     /// `https://api.slack.com/apps?new_app=1&manifest_json=…` for the manual fallback.
-    public static func createFromManifestURL() -> URL {
+    public static func createFromManifestURL() throws -> URL {
         var c = URLComponents(string: "https://api.slack.com/apps")!
-        c.queryItems = [URLQueryItem(name: "new_app", value: "1"), URLQueryItem(name: "manifest_json", value: json(redirectPort: nil))]
+        c.queryItems = [URLQueryItem(name: "new_app", value: "1"), URLQueryItem(name: "manifest_json", value: try json(redirectPort: nil))]
         return c.url!
     }
 

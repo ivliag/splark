@@ -4,7 +4,7 @@ Slack, sorted by what needs you.
 
 Splark is a small macOS menu-bar app. A pixel spark in the menu bar lights up when Slack needs you. Click it to see every unread conversation summarised in a line and sorted into three levels: **needs action**, **question for you** and **just comments**. Then reply, react or mark things as read without opening Slack.
 
-> **Status: early development.** Nothing to install yet. The foundation is built, and the Slack and ChatGPT integrations have been tried on real accounts ([`docs/spikes.md`](docs/spikes.md)). Slack's 12-hour tokens refresh without a client secret, and Plan 2 (the engine) is written. The engine and the panel come next. The design spec is in [`docs/superpowers/specs`](docs/superpowers/specs/2026-10-16-splark-design.md), and the interactive prototypes are in [`design/prototype`](design/prototype); open the HTML files in a browser.
+> **Status: early development.** Nothing to install yet. The foundation is built, and the Slack and ChatGPT integrations have been tried on real accounts ([`docs/spikes.md`](docs/spikes.md)). The engine is built: it finds unread conversations and threads, ranks them with your ChatGPT plan, and can reply, react and mark read (try `swift run splark-dev inbox`). The panel comes next. The design spec is in [`docs/superpowers/specs`](docs/superpowers/specs/2026-10-16-splark-design.md), and the interactive prototypes are in [`design/prototype`](design/prototype); open the HTML files in a browser.
 
 ## How it works
 
@@ -20,7 +20,9 @@ Requirements: macOS 14+, Xcode 16 or newer (Swift 6).
 swift test                          # all unit tests
 ./scripts/build-app.sh debug        # builds build/Splark.app (ad-hoc signed)
 open build/Splark.app
-swift run splark-dev                # developer commands: badge, slack-connect, slack-probe, chatgpt-login, chatgpt-probe
+swift run splark-dev                # developer commands (run it for the list)
+swift run splark-dev inbox          # the whole engine against your Slack and ChatGPT, printing the inbox
+swift run splark-dev triage-eval    # score the triage evaluation set against your ChatGPT plan
 ```
 
 `splark-dev` keeps its tokens in the Keychain under the service `dev.splark.dev`, separate from the app. What the integration spikes found is in [`docs/spikes.md`](docs/spikes.md).

@@ -6,13 +6,16 @@ import SplarkKit
 let usage = """
 usage: splark-dev <command>
   badge [--seconds N]                 watch Slack's Dock badge
-  slack-connect --config-token T      create your private Slack app and connect it (or --user-token xoxp-…)
-  slack-probe [--team T…]             run the Slack spike checks against the connected workspace
+  slack-connect [--manual]            copy an app configuration token (or, with --manual, a user token), then run:
+                                      creates your private Slack app and connects it
+  slack-reauth [--client-id ID] [--port P]  re-authorise the existing app (Allow only)
+  slack-refresh                       refresh the stored token now
+  slack-probe [--team T]              run the Slack spike checks against the connected workspace
   slack-manifest-url                  print the manual "create from manifest" link (fallback)
-  slack-reauth --client-id ID [--port P]  re-authorise your existing app (Allow only) and keep its refresh token
-  slack-refresh [--with-secret]       refresh the stored token (no client secret unless --with-secret reads it from the clipboard)
   chatgpt-login                       Sign in with ChatGPT
-  chatgpt-probe [--model M]           list models and send a tiny structured request (--raw-models dumps /v1/models)
+  chatgpt-probe [--model M]           list models and send a tiny structured request
+  inbox [--minutes N] [--no-text]     run the whole engine against your Slack and ChatGPT, printing the inbox
+  triage-eval [--model M]             score the triage evaluation set against your ChatGPT plan
 """
 
 do {
@@ -20,11 +23,13 @@ do {
     case "badge": await badgeCommand()
     case "slack-connect": try await slackConnectCommand()
     case "slack-probe": try await slackProbeCommand()
-    case "slack-manifest-url": print(SlackAppManifest.createFromManifestURL())
+    case "slack-manifest-url": print(try SlackAppManifest.createFromManifestURL())
     case "slack-reauth": try await slackReauthCommand()
     case "slack-refresh": try await slackRefreshCommand()
     case "chatgpt-login": try await chatgptLoginCommand()
     case "chatgpt-probe": try await chatgptProbeCommand()
+    case "inbox": try await inboxCommand()
+    case "triage-eval": try await triageEvalCommand()
     default: print(usage)
     }
 } catch {

@@ -4,52 +4,66 @@ import SplarkKit
 /// Dev-tool secrets live under their own Keychain service, separate from the app's "dev.splark.Splark".
 let store = KeychainStore(service: "dev.splark.dev")
 
+/// Copy an app configuration token (`xoxe.xoxp-…`), or with `--manual` a user token, then run this.
 func slackConnectCommand() async throws {
-    if let userToken = option("--user-token") {
-        let me = try await SlackClient(token: userToken).authTest()
-        try store.write(userToken, for: "slack.\(me.teamId)")
-        try store.write(me.teamId, for: "slack.last")
-        print("Stored user token \(mask(userToken)) for \(me.team ?? me.teamId) as \(me.user ?? me.userId).")
+    let setup = WorkspaceSetup(open: openInBrowser)
+    if args.contains("--manual") {
+        try save(try await setup.connect(userToken: try clipboardSecret()))
         return
     }
-    guard let configToken = option("--config-token") else { fail("pass --config-token xoxe.xoxp-… (or --user-token xoxp-…)") }
-    var server: LoopbackServer?
-    var port: UInt16 = 0
-    for candidate in SlackAppManifest.redirectPorts {
-        if let s = try? LoopbackServer(port: candidate, path: SlackAppManifest.callbackPath) { server = s; port = candidate; break }
-    }
-    guard let server else { fail("no free port in \(SlackAppManifest.redirectPorts)") }
-    let slack = SlackClient(token: nil)
-    print("1/3 Creating your private Slack app (redirect port \(port))…")
-    let created = try await slack.appsManifestCreate(configToken: configToken, manifestJSON: SlackAppManifest.json(redirectPort: port))
-    print("    app \(created.appId), client \(created.credentials.clientId)")
-    let pkce = PKCE.random(), state = PKCE.randomURLSafeString(byteCount: 16)
-    let authorize = SlackAppManifest.authorizeURL(clientId: created.credentials.clientId, redirectPort: port, state: state, pkce: pkce)
-    print("2/3 Opening Slack. Click Allow… (\(authorize.absoluteString.prefix(80))…)")
-    openInBrowser(authorize)
-    let callback = try await server.waitForCallback()
-    guard callback.query["state"] == state else { fail("state mismatch") }
-    if let error = callback.query["error"] { fail("Slack returned \(error)") }
-    guard let code = callback.query["code"] else { fail("no code in callback: \(callback.query)") }
-    print("3/3 Exchanging the code (PKCE, no client secret)…")
-    let access = try await slack.oauthV2Access(clientId: created.credentials.clientId, code: code,
-                                               redirectURI: SlackAppManifest.redirectURI(port: port), codeVerifier: pkce.verifier)
-    guard let token = access.authedUser.accessToken, let team = access.team else { fail("no user token in response") }
-    try store.write(token, for: "slack.\(team.id)")
-    try store.write(team.id, for: "slack.last")
-    print("""
-    Connected \(team.name ?? team.id) as \(access.authedUser.id).
-      token: \(mask(token)) (type \(access.authedUser.tokenType ?? "?"))
-      refresh token: \(access.authedUser.refreshToken == nil ? "none" : "present") · expires_in: \(access.authedUser.expiresIn.map(String.init) ?? "none")
-      scopes: \(access.authedUser.scope ?? "?")
-    """)
+    let app = try await setup.createApp(configToken: try clipboardSecret())
+    print("Created app \(app.appId ?? "?") (client \(app.clientId), port \(app.redirectPort)). Opening Slack: click Allow…")
+    try save(try await setup.authorize(app))
+}
+
+/// Re-authorises the existing app (Allow only, no config token): after the refresh token expired or scopes changed.
+func slackReauthCommand() async throws {
+    let stored = try await devCredentials()
+    guard let clientId = option("--client-id") ?? stored?.clientId else { fail("no client_id stored; pass --client-id") }
+    let port = UInt16(option("--port") ?? "53682") ?? 53682
+    print("Opening Slack: click Allow…")
+    try save(try await WorkspaceSetup(open: openInBrowser).authorize(SlackAppRegistration(appId: nil, clientId: clientId, redirectPort: port)))
+}
+
+/// Swaps the refresh token for a new access token now, and checks the new token works.
+func slackRefreshCommand() async throws {
+    guard let stored = try await devCredentials() else { fail("no stored Slack token; run slack-connect first") }
+    let manager = SlackTokenManager(credentials: stored, store: store)
+    let token = try await manager.refreshAfterRejection(of: stored.accessToken)
+    let me = try await SlackClient(token: token).authTest()
+    print("Refreshed: \(mask(token)) works for \(me.user ?? me.userId) @ \(me.team ?? me.teamId), expires \(await manager.credentials.expiresAt?.formatted() ?? "never").")
+}
+
+private func save(_ connection: SlackConnection) throws {
+    try connection.credentials.save(to: store)
+    try store.write(connection.workspace.teamId, for: "slack.last")
+    let c = connection.credentials
+    print("Connected \(connection.workspace.name) as \(connection.workspace.userName ?? c.userId). Token \(mask(c.accessToken)), refresh token \(c.refreshToken == nil ? "none" : "kept"), expires \(c.expiresAt?.formatted() ?? "never").")
+}
+
+/// The workspace to use (`--team T`, else the last connected) as a client whose token refreshes itself.
+func devSlack() async throws -> (SlackClient, SlackCredentials) {
+    guard let credentials = try await devCredentials() else { fail("no stored Slack token; run slack-connect first") }
+    return (SlackClient(tokens: SlackTokenManager(credentials: credentials, store: store)), credentials)
+}
+
+/// Loads the dev credentials. Tokens saved before Plan 2 (a bare token under `slack.<TEAM>`, and
+/// `slack.<TEAM>.refresh` from the spike) are converted to `SlackCredentials` once.
+func devCredentials() async throws -> SlackCredentials? {
+    guard let team = try option("--team") ?? store.read("slack.last"), let raw = try store.read(SlackCredentials.key(teamId: team)) else { return nil }
+    if raw.hasPrefix("{") { return try SlackCredentials.load(teamId: team, from: store) }
+    struct Legacy: Decodable { let clientId: String; let refreshToken: String; let expiresAt: Date }
+    let legacy = try store.read("slack.\(team).refresh").flatMap { try? JSONDecoder().decode(Legacy.self, from: Data($0.utf8)) }
+    let me = try await SlackClient(token: raw).authTest()
+    let credentials = SlackCredentials(teamId: team, userId: me.userId, accessToken: raw, refreshToken: legacy?.refreshToken,
+                                       expiresAt: legacy?.expiresAt, clientId: legacy?.clientId)
+    try credentials.save(to: store)
+    try store.delete("slack.\(team).refresh")
+    return credentials
 }
 
 func slackProbeCommand() async throws {
-    guard let team = try option("--team") ?? store.read("slack.last"), let token = try store.read("slack.\(team)") else {
-        fail("no stored Slack token; run slack-connect first")
-    }
-    let slack = SlackClient(token: token)
+    let (slack, _) = try await devSlack()
     let me = try await slack.authTest()
     print("auth.test: \(me.user ?? me.userId) @ \(me.team ?? me.teamId)")
 

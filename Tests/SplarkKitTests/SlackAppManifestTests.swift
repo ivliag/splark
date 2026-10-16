@@ -8,7 +8,7 @@ import Testing
     }
 
     @Test func pkceManifestHasRedirectScopesAndNoRotation() throws {
-        let m = try object(SlackAppManifest.json(redirectPort: 53682))
+        let m = try object(try SlackAppManifest.json(redirectPort: 53682))
         let oauth = try #require(m["oauth_config"] as? [String: Any])
         #expect(oauth["redirect_urls"] as? [String] == ["http://localhost:53682/slack/callback"])
         #expect(oauth["pkce_enabled"] as? Bool == true)
@@ -39,8 +39,8 @@ import Testing
     }
 
     @Test func createFromManifestURLEmbedsManualManifest() throws {
-        let url = SlackAppManifest.createFromManifestURL()
+        let url = try SlackAppManifest.createFromManifestURL()
         let manifest = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "manifest_json" }?.value
-        #expect(manifest == SlackAppManifest.json(redirectPort: nil))
+        #expect(try manifest == SlackAppManifest.json(redirectPort: nil))
     }
 }

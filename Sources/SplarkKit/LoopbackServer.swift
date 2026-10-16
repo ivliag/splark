@@ -8,10 +8,11 @@ public final class LoopbackServer: @unchecked Sendable {
         public let query: [String: String]
     }
 
-    public enum ServerError: Error, Equatable { case portUnavailable(UInt16), timedOut, cancelled }
+    public enum ServerError: Error, Equatable { case portUnavailable(UInt16), timedOut, cancelled, alreadyWaiting }
 
     public let port: UInt16
     private let path: String
+    private let expectedState: String?
     private let successHTML: String
     private let cancelledHTML: String
     private let queue = DispatchQueue(label: "splark.loopback")
@@ -21,9 +22,11 @@ public final class LoopbackServer: @unchecked Sendable {
     private var finished = false
 
     /// Binds 127.0.0.1 and, unless `ipv4Only`, ::1 on `port` (0 = pick a free port).
-    public init(port: UInt16, path: String, ipv4Only: Bool = false,
+    /// With `expectedState`, a redirect carrying any other `state` is turned away and the wait goes on.
+    public init(port: UInt16, path: String, ipv4Only: Bool = false, expectedState: String? = nil,
                 successHTML: String = LoopbackServer.defaultHTML, cancelledHTML: String = LoopbackServer.cancelledHTML) throws {
         self.path = path
+        self.expectedState = expectedState
         self.successHTML = successHTML
         self.cancelledHTML = cancelledHTML
         let v4 = try Self.makeListener(host: "127.0.0.1", port: port)
@@ -44,6 +47,13 @@ public final class LoopbackServer: @unchecked Sendable {
     <h2 style="font-weight:600">You're connected.</h2><p>You can close this tab and go back to Splark.</p></body></html>
     """
 
+    /// Shown for a redirect whose `state` isn't the one this server waits for (an old tab, or another app).
+    public static let staleHTML = """
+    <!doctype html><html><head><meta charset="utf-8"><title>Splark</title></head>
+    <body style="font-family:-apple-system,sans-serif;color:#3a3a3e;text-align:center;padding-top:80px">
+    <h2 style="font-weight:600">This sign-in link is out of date.</h2><p>Go back to Splark and start again.</p></body></html>
+    """
+
     /// Shown when the redirect carries no `code` (the user clicked Cancel, or the provider refused).
     public static let cancelledHTML = """
     <!doctype html><html><head><meta charset="utf-8"><title>Splark</title></head>
@@ -59,6 +69,7 @@ public final class LoopbackServer: @unchecked Sendable {
                     self.queue.async {
                         if let received = self.received { cont.resume(returning: received) }
                         else if self.finished { cont.resume(throwing: ServerError.cancelled) }
+                        else if self.continuation != nil { cont.resume(throwing: ServerError.alreadyWaiting) }
                         else { self.continuation = cont }
                     }
                 }
@@ -67,19 +78,40 @@ public final class LoopbackServer: @unchecked Sendable {
                 try await Task.sleep(for: timeout)
                 throw ServerError.timedOut
             }
-            defer { group.cancelAll(); self.stop() }
-            return try await group.next()!
+            do {
+                let callback = try await group.next()!
+                group.cancelAll()
+                stop()
+                return callback
+            } catch ServerError.alreadyWaiting {
+                group.cancelAll()   // the first waiter keeps the server
+                throw ServerError.alreadyWaiting
+            } catch {
+                group.cancelAll()
+                stop()
+                throw error
+            }
         }
     }
 
+    deinit { listeners.forEach { $0.cancel() } }
+
+    /// Stops listening and returns once the port is free again, so it can be bound straight away.
     public func stop() {
-        queue.async {
-            guard !self.finished else { return }
-            self.finished = true
-            self.listeners.forEach { $0.cancel() }
-            self.continuation?.resume(throwing: ServerError.cancelled)
-            self.continuation = nil
+        dispatchPrecondition(condition: .notOnQueue(queue))
+        let closed = DispatchSemaphore(value: 0)
+        let open: [NWListener] = queue.sync {
+            guard !finished else { return [] }
+            finished = true
+            continuation?.resume(throwing: ServerError.cancelled)
+            continuation = nil
+            return listeners
         }
+        for listener in open {
+            listener.stateUpdateHandler = { if case .cancelled = $0 { closed.signal() } }
+            listener.cancel()
+        }
+        for _ in open { _ = closed.wait(timeout: .now() + 1) }
     }
 
     private static func makeListener(host: String, port: UInt16) throws -> NWListener {
@@ -129,11 +161,13 @@ public final class LoopbackServer: @unchecked Sendable {
     }
 
     private func respond(_ connection: NWConnection, head: String) {
-        let callback = Self.parse(requestHead: head)
+        let parsed = Self.parse(requestHead: head)
+        let stale = parsed?.path == path && expectedState != nil && parsed?.query["state"] != expectedState
+        let callback = stale ? nil : parsed
         let matched = callback?.path == path
         let gotCode = !(callback?.query["code"] ?? "").isEmpty
-        let body = matched ? (gotCode ? successHTML : cancelledHTML) : "Not found"
-        let status = matched ? "200 OK" : "404 Not Found"
+        let body = stale ? Self.staleHTML : matched ? (gotCode ? successHTML : cancelledHTML) : "Not found"
+        let status = stale ? "400 Bad Request" : matched ? "200 OK" : "404 Not Found"
         let response = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
         connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
         if matched, let callback, !finished {
@@ -163,5 +197,13 @@ final class LockedBox<Value>: @unchecked Sendable {
     var value: Value {
         get { lock.withLock { _value } }
         set { lock.withLock { _value = newValue } }
+    }
+    /// Reads and changes the value under the lock.
+    func withLock<Result>(_ body: (inout Value) throws -> Result) rethrows -> Result {
+        try lock.withLock { try body(&_value) }
+    }
+    /// Stores `newValue` and returns the previous value, atomically.
+    @discardableResult func exchange(_ newValue: Value) -> Value {
+        lock.withLock { let old = _value; _value = newValue; return old }
     }
 }

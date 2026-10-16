@@ -905,7 +905,7 @@ Slack's PKCE user tokens expire every 12 hours (spike 1). `SlackTokenManager` ke
     - `init(credentials:store:refresher:now:)`, where `Refresher = @Sendable (clientId, refreshToken) async throws -> SlackTokenRefresh`;
     - `var credentials`.
   - `SlackClient.init(tokens: SlackTokenSource?, transport:limiter:sleeper:baseURL:)`. `init(token:)` stays.
-  - `SlackError.refreshFailed(String)`.
+  - `SlackError.refreshFailed(String)`: only for refusals (`invalid_refresh_token`, `invalid_client_id`, `token_revoked`), or when the workspace was disconnected during the refresh. Other errors pass through unchanged.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2954,12 +2954,13 @@ Slack has no read state for threads, so Splark keeps its own line per thread (sp
 
 **Interfaces:**
 - Produces:
-  - `struct ThreadWatch: Codable { channelId, threadTs, seenThrough, lastActivity, due }`.
+  - `struct ThreadWatch: Codable { channelId, threadTs, seenThrough, newestSeen?, lastActivity, due }`.
   - `struct ThreadTracker: Codable, Equatable`:
     - `watches`, `watch(channelId:threadTs:) -> ThreadWatch?`;
-    - `watch(channelId:threadTs:seenThrough:now:)`, which never moves an existing line back;
-    - `userReplied(channelId:threadTs:ts:now:)`, `clear(channelId:threadTs:through:)`;
-    - `due(now:)`, `nextDue`, `checked(channelId:threadTs:newestReply:now:)` (60 s if busy, else 180 s);
+    - `watch(channelId:threadTs:seenThrough:activity:now:)`, which never moves an existing line back (`activity` is the thread's own latest activity);
+    - `isUnseen(_:channelId:threadTs:) -> Bool`;
+    - `userReplied(channelId:threadTs:ts:now:)`, `clear(channelId:threadTs:through:)`, `clearAll(through:)`;
+    - `due(now:)`, `nextDue`, `checked(channelId:threadTs:newestReply: String?, now:)` (60 s if busy, else 180 s);
     - `postpone(channelId:threadTs:until:)`, `remove(channelId:threadTs:)`;
     - `wake(channelId:threadTs:)`, `wakeAll()`, `prune(now:)` (7 days).
 
@@ -3206,16 +3207,16 @@ The tests run against `FakeSlack`, an in-memory workspace that refuses a zero `o
 **Interfaces:**
 - Consumes: `SlackAPI` (Task 4), `UserDirectory` and `MessageNormalizer` (Task 5), the Task 6 types, `Workspace` (Task 3).
 - Produces:
-  - `enum SyncProblem { offline(retryAt:), missingScope, reauthorize, tokenRevoked }`, with `stopsSync`.
-  - `struct SyncStatus { problem?, progress, lastSuccess? }`.
+  - `enum SyncProblem { offline(retryAt:), reauthorize, tokenRevoked }`, with `stopsSync`.
+  - `struct SyncStatus { problem?, missingScope, progress, lastSuccess? }`. `missingScope` stays set while sync goes on.
   - `struct SyncUpdate { upserted: [ItemKey: ConversationSnapshot], removed: Set<ItemKey> }`, with `upsert`, `remove`, `merge` and `isEmpty`.
   - `actor SyncEngine`:
     - `init(workspace:slack:names:excluded:config:now:)`;
     - `Config`, and `Step { update, didWork, nextWake? }`;
-    - `step() async -> Step`, `markedRead(_:through:) -> SyncUpdate`, `setExcluded(_:) -> SyncUpdate`;
-    - `snapshots`, `status`.
+    - `step() async -> Step`, `markedRead(_:through:) -> SyncUpdate` (keeps anything newer), `setExcluded(_:) -> SyncUpdate`;
+    - `snapshots`, `status`. A check's result is dropped if the channel was excluded or marked read while it waited on Slack.
   - Test helpers:
-    - `FakeSlack` (`addChannel`, `post`, `reply`, `setLastRead`, `addUser`, `setSearch`, `fail`, `calls`, `posted`, `reactions`, `lastRead`);
+    - `FakeSlack` (`addChannel`, `post`, `reply`, `setLastRead`, `addUser`, `setSearch`, `fail`, `onCall`, `calls`, `posted`, `reactions`, `lastRead`);
     - `ts(_:)`, `lumen`, `makeEngine(_:_:excluded:)`, `SyncEngine.runUntilIdle()`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -3999,7 +4000,7 @@ Spec §6.3 steps 4 and 5, and the badge trigger from step 3. `SyncMemory` holds 
     - `didReply(channelId:threadTs:ts:)`;
     - `badgeChanged(_: SlackBadge?) -> SyncUpdate`;
     - `refreshNow()`.
-  - `Config` gains `sweepInterval`, `firstSweepLookback` and `threadExpiry`.
+  - `Config` gains `sweepInterval`, `firstSweepLookback`, `sweepOverlap` and `threadExpiry`.
   - `makeEngine` gains `memory:`.
   - `FakeSlack.failSearch(_:with:)`.
 
@@ -5029,6 +5030,8 @@ The AI side of spec §5.2: `ChatGPTSession` owns the signed-in account, and `Cha
     - `init(session:openAI:chosenModel:now:)`;
     - `preferredModels`, `pickModel(available:chosen:)`;
     - `setModel(_:)`, `models()`.
+    - A model that refuses `json_schema` (HTTP 400 naming `text.format`) is asked for JSON in the instructions, and remembered.
+  - `ChatGPTSession`: a refresh that finishes after a sign-out or sign-in doesn't undo it.
   - `OpenAIError.rateLimited(retryAfter:body:)`.
   - Test helpers `RequestLog`, `fakeResponses(_:log:)` and `sse(_:)`.
   - `splark-dev chatgpt-login` and `chatgpt-probe` now use the session and the client.
@@ -5903,6 +5906,7 @@ The `Triage` actor (spec §7.3, §9). It waits for a quiet moment, batches direc
     - `state`, `waitingCount`, `nextFlush: Date?`;
     - `setReaders(_:)`, `setPaused(_:)`, `resume()`;
     - `update(_: SyncUpdate)`, `flushIfDue() async -> [TriageResult]`.
+    - Failed requests retry after `Config.retryAfterFailure` (60 s), doubling up to `maxRetryDelay` (30 min).
   - Test helpers `FakeLLM` (`everything(_:)`, `ids(_:)`), `update(_:removed:)` and `channelSnapshot(_:newest:kind:text:)`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -6755,7 +6759,7 @@ for the panel's actions."
   - `struct ActionFailure { key, message }`.
   - `DeepLink.slack(teamId:channelId:messageTs:threadTs:) -> URL`.
   - `@MainActor @Observable final class Actions`:
-    - `init(inbox:targets:onUpdate:undoWindow:open:)`, and `UndoToken`;
+    - `init(inbox:targets:onUpdate:undoWindow:open:)`, where `onUpdate` is `@MainActor (SyncUpdate) async -> Void`, and `UndoToken`;
     - `lastFailure`;
     - `reply(to:text:)`, `react(to:with:)`;
     - `markRead(_:) -> UndoToken`, `markAllCommentsRead()`, `undo(_:)`, `commitPendingReads()`;

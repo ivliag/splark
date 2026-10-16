@@ -1,6 +1,27 @@
 import Foundation
 
-/// The Slack methods Plan 1 needs (spec §6.2). Plan 2 adds the rest.
+/// What the sync engine and the panel's actions need from Slack (spec §6.2). `SlackClient` is the real one;
+/// tests use a fake.
+public protocol SlackAPI: Sendable {
+    func authTest() async throws -> SlackAuthTest
+    func allConversations() async throws -> [SlackConversation]
+    func conversationsInfo(_ channel: String) async throws -> SlackConversation
+    func conversationsHistory(_ channel: String, oldest: String?, latest: String?, inclusive: Bool, limit: Int) async throws -> SlackHistory
+    func conversationsReplies(_ channel: String, ts: String, oldest: String?, limit: Int) async throws -> SlackHistory
+    func usersInfo(_ user: String) async throws -> SlackUser
+    func searchMessages(_ query: String, count: Int) async throws -> SlackSearchResult
+    func chatPostMessage(channel: String, text: String, threadTs: String?) async throws -> SlackPostedMessage
+    func reactionsAdd(channel: String, timestamp: String, name: String) async throws
+    func conversationsMark(channel: String, ts: String) async throws
+    func chatGetPermalink(channel: String, messageTs: String) async throws -> URL
+}
+
+extension SlackClient: SlackAPI {}
+
+private struct SlackOK: Decodable, Sendable {}
+private struct SlackPermalink: Decodable, Sendable { let permalink: URL }
+private struct SlackUserInfo: Decodable, Sendable { let user: SlackUser }
+
 extension SlackClient {
     public func authTest() async throws -> SlackAuthTest {
         try await call("auth.test", tier: .tier4)
@@ -30,11 +51,50 @@ extension SlackClient {
         return r.channel
     }
 
-    /// Messages newer than `oldest` (exclusive), newest first, as Slack returns them.
-    public func conversationsHistory(_ channel: String, oldest: String?, limit: Int) async throws -> SlackHistory {
+    /// Messages between `oldest` and `latest`, newest first, as Slack returns them.
+    public func conversationsHistory(_ channel: String, oldest: String?, latest: String?, inclusive: Bool, limit: Int) async throws -> SlackHistory {
         var p = ["channel": channel, "limit": String(limit)]
         if let oldest { p["oldest"] = oldest }
+        if let latest { p["latest"] = latest; p["inclusive"] = String(inclusive) }
         return try await call("conversations.history", tier: .tier3, params: p)
+    }
+
+    /// Messages newer than `oldest` (exclusive), newest first.
+    public func conversationsHistory(_ channel: String, oldest: String?, limit: Int) async throws -> SlackHistory {
+        try await conversationsHistory(channel, oldest: oldest, latest: nil, inclusive: false, limit: limit)
+    }
+
+    /// One thread's messages, oldest first, newer than `oldest` (Slack may also include the parent).
+    public func conversationsReplies(_ channel: String, ts: String, oldest: String?, limit: Int) async throws -> SlackHistory {
+        var p = ["channel": channel, "ts": ts, "limit": String(limit)]
+        if let oldest { p["oldest"] = oldest }
+        return try await call("conversations.replies", tier: .tier3, params: p)
+    }
+
+    public func usersInfo(_ user: String) async throws -> SlackUser {
+        let r: SlackUserInfo = try await call("users.info", tier: .tier4, params: ["user": user])
+        return r.user
+    }
+
+    /// Slack allows about one message per second per channel.
+    public func chatPostMessage(channel: String, text: String, threadTs: String?) async throws -> SlackPostedMessage {
+        var p = ["channel": channel, "text": text]
+        if let threadTs { p["thread_ts"] = threadTs }
+        return try await call("chat.postMessage", tier: .perMinute(60), params: p)
+    }
+
+    public func reactionsAdd(channel: String, timestamp: String, name: String) async throws {
+        let _: SlackOK = try await call("reactions.add", tier: .tier3, params: ["channel": channel, "timestamp": timestamp, "name": name])
+    }
+
+    /// Moves the user's read marker in `channel` to `ts`.
+    public func conversationsMark(channel: String, ts: String) async throws {
+        let _: SlackOK = try await call("conversations.mark", tier: .tier3, params: ["channel": channel, "ts": ts])
+    }
+
+    public func chatGetPermalink(channel: String, messageTs: String) async throws -> URL {
+        let r: SlackPermalink = try await call("chat.getPermalink", tier: .tier4, params: ["channel": channel, "message_ts": messageTs])
+        return r.permalink
     }
 
     public func searchMessages(_ query: String, count: Int = 20) async throws -> SlackSearchResult {

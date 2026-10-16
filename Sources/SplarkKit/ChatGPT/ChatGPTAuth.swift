@@ -16,7 +16,14 @@ public struct ChatGPTCredentials: Codable, Sendable, Equatable {
     public func needsRefresh(now: Date) -> Bool { expiresAt.timeIntervalSince(now) < 300 }
 }
 
-public enum ChatGPTAuthError: Error, Equatable { case stateMismatch, missingCode, denied(error: String, description: String?), http(Int, String), decoding(String) }
+extension ChatGPTCredentials: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String {
+        "ChatGPTCredentials(clientId: \(clientId), email: \(email ?? "nil"), accessToken: \(Redact.token(accessToken)), refreshToken: \(Redact.token(refreshToken)), expiresAt: \(expiresAt))"
+    }
+    public var debugDescription: String { description }
+}
+
+public enum ChatGPTAuthError: Error, Equatable { case stateMismatch, missingCode, missingRefreshToken, denied(error: String, description: String?), http(Int, String), decoding(String) }
 
 public struct ChatGPTAuth: Sendable {
     public static let authorizeEndpoint = URL(string: "https://auth.openai.com/api/accounts/authorize")!
@@ -94,7 +101,7 @@ public struct ChatGPTAuth: Sendable {
     }
 
     public func refresh(_ credentials: ChatGPTCredentials) async throws -> ChatGPTCredentials {
-        guard let refreshToken = credentials.refreshToken else { throw ChatGPTAuthError.missingCode }
+        guard let refreshToken = credentials.refreshToken else { throw ChatGPTAuthError.missingRefreshToken }
         let token = try await tokenRequest([
             "grant_type": "refresh_token", "refresh_token": refreshToken,
             "client_id": credentials.clientId, "resource": Self.resource,

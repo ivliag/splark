@@ -1,4 +1,5 @@
 import AppKit
+import SplarkKit
 import Foundation
 
 // Shared helpers for splark-dev commands.
@@ -13,7 +14,7 @@ func option(_ name: String) -> String? {
     return args[i + 1]
 }
 
-func mask(_ token: String) -> String { token.count > 12 ? "\(token.prefix(9))…\(token.suffix(4))" : "…" }
+func mask(_ token: String) -> String { Redact.token(token) }
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data("error: \(message)\n".utf8))
@@ -21,3 +22,12 @@ func fail(_ message: String) -> Never {
 }
 
 func openInBrowser(_ url: URL) { NSWorkspace.shared.open(url) }
+
+/// Reads a secret the user just copied, then clears the clipboard. Secrets never go on a command line,
+/// where a process listing would show them.
+@MainActor func clipboardSecret() throws -> String {
+    let value = (NSPasteboard.general.string(forType: .string) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    NSPasteboard.general.clearContents()
+    guard !value.isEmpty else { fail("the clipboard is empty: copy the token first") }
+    return value
+}

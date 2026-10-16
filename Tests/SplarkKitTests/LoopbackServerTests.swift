@@ -76,3 +76,38 @@ import Testing
         #expect(PKCE.random() != PKCE.random())
     }
 }
+
+@Suite struct LoopbackServerSafetyTests {
+    @Test func aCallbackWithTheWrongStateIsTurnedAwayAndTheWaitGoesOn() async throws {
+        let server = try LoopbackServer(port: 0, path: "/callback", expectedState: "good")
+        let waiter = Task { try await server.waitForCallback(timeout: .seconds(5)) }
+        let (_, stray) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(server.port)/callback?code=evil&state=bad")!)
+        #expect((stray as! HTTPURLResponse).statusCode == 400)
+        _ = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(server.port)/callback?code=real&state=good")!)
+        #expect(try await waiter.value.query["code"] == "real")
+    }
+
+    @Test func aSecondWaiterFailsInsteadOfHanging() async throws {
+        let server = try LoopbackServer(port: 0, path: "/callback")
+        let first = Task { try await server.waitForCallback(timeout: .seconds(5)) }
+        try await Task.sleep(for: .milliseconds(50))
+        await #expect(throws: LoopbackServer.ServerError.alreadyWaiting) { try await server.waitForCallback(timeout: .seconds(5)) }
+        _ = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(server.port)/callback?code=c&state=s")!)
+        #expect(try await first.value.query["code"] == "c")
+    }
+
+    @Test func droppingTheServerStopsListening() async throws {
+        var port: UInt16 = 0
+        do { port = try LoopbackServer(port: 0, path: "/callback").port }
+        var refused = false
+        for _ in 0..<20 where !refused {
+            do {
+                _ = try await URLSession.shared.data(for: URLRequest(url: URL(string: "http://127.0.0.1:\(port)/callback")!, timeoutInterval: 1))
+            } catch let error as URLError where error.code == .cannotConnectToHost {
+                refused = true   // nothing listens there any more
+            } catch {}           // a timeout means something still holds the port
+            if !refused { try await Task.sleep(for: .milliseconds(50)) }
+        }
+        #expect(refused)
+    }
+}

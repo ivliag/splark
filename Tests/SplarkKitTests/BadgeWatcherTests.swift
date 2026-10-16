@@ -41,3 +41,41 @@ import Testing
         #expect(box.lock.withLock { box.seen } == [.dot])
     }
 }
+
+@Suite struct ProcessRunnerTests {
+    @Test func returnsStandardOutput() throws {
+        #expect(try ProcessRunner().run("/bin/echo", ["hi"]) == "hi\n")
+    }
+
+    @Test func killsAToolThatHangs() throws {
+        let started = Date()
+        #expect(throws: ProcessRunnerError.timedOut("/bin/sleep")) { try ProcessRunner(timeout: 0.3).run("/bin/sleep", ["5"]) }
+        #expect(Date().timeIntervalSince(started) < 2)
+    }
+}
+
+@Suite struct BadgeWatcherLifecycleTests {
+    final class CountingRunner: CommandRunner, @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var calls: Int { lock.withLock { count } }
+        func run(_ executable: String, _ arguments: [String]) throws -> String {
+            lock.withLock { count += 1 }
+            return #""StatusLabel"={ "label"="" }"#
+        }
+    }
+
+    @Test func racingStartsAndStopsLeaveNothingPolling() async throws {
+        let runner = CountingRunner()
+        let watcher = BadgeWatcher(runner: runner, interval: .milliseconds(5), isSlackRunning: { true })
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<50 { group.addTask { if i.isMultiple(of: 2) { watcher.start { _ in } } else { watcher.stop() } } }
+        }
+        watcher.stop()
+        #expect(!watcher.isRunning)
+        try await Task.sleep(for: .milliseconds(50))
+        let settled = runner.calls
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(runner.calls == settled)
+    }
+}
