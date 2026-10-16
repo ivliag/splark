@@ -26,6 +26,16 @@ Run 2026-10-16 against the Twain workspace (211 conversations).
   2. Ask the user to re-authorise (Allow only, same app, no new config token) when the refresh token has expired.
   3. Treat a zero `last_read` as "nothing read". For DMs, rely on `unread_count_display`; skip the history call when it is 0.
 
+### Token refresh (2026-10-16, before Plan 2)
+
+Run with `splark-dev slack-reauth` (Allow only, same app A0C9LFCEJQK, no config token) and then `splark-dev slack-refresh`, twice.
+
+- `oauth.v2.access` with `grant_type=refresh_token`, `client_id` and `refresh_token`, and **no client secret**: **worked**. The new token passed `auth.test`.
+- The refresh response is **top-level**, not under `authed_user`: `access_token`, `refresh_token`, `expires_in` (43200), `token_type`, `user_id`, `scope`, `team`. It also warns `superfluous_charset` about the `charset=utf-8` in our Content-Type; this is harmless.
+- **Each refresh issues a new refresh token.** The previous refresh token was still accepted once afterwards, and using it didn't invalidate the newer one: refreshing again with the stored token worked.
+- **The previous access token stays valid** right after a refresh.
+- **Decision:** refresh without a client secret, so Splark never stores one. Refresh when the token is within 30 minutes of expiry, or on a `token_expired` error. Save the new token and refresh token to the Keychain before using them. A crash between refreshing and saving is recoverable, because the old refresh token still works. The user is asked to re-authorise only when the refresh itself fails with `invalid_refresh_token`.
+
 ## 4. Mention sweep
 
 - `search.messages "<@U04KS7K15LH>"`: total 2557, results across channels, group DMs and threads. `"@ivan.liagushkin"` returned the same total.

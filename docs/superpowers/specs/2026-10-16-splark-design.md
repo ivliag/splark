@@ -234,7 +234,11 @@ The user's app is created with `apps.manifest.create`, using the pasted app conf
   - the user token, the team ID and name;
   - the token's refresh token and expiry, and the app's `client_id`.
 
-  Slack issues **rotating** user tokens to PKCE apps, even with `token_rotation_enabled: false` (measured 2026-10-16, see `docs/spikes.md`). The token starts `xoxe.xoxp-` and expires after 12 hours. Splark refreshes it before expiry with `oauth.v2.access grant_type=refresh_token`. Whether that works without the client secret is verified at the start of Plan 2. If it doesn't, Splark also stores the user's own app `client_secret`, which `apps.manifest.create` returns. When the refresh token itself has expired, the user re-authorises the same app (Allow only, no new setup token).
+  Slack issues **rotating** user tokens to PKCE apps, even with `token_rotation_enabled: false` (measured 2026-10-16, see `docs/spikes.md`). The token starts `xoxe.xoxp-` and expires after 12 hours.
+  - Splark refreshes it with `oauth.v2.access grant_type=refresh_token`, `client_id` and the refresh token, and **no client secret** (verified live). The client secret is never stored.
+  - **When:** within 30 minutes of expiry, or after a `token_expired` error.
+  - **Each refresh returns a new refresh token.** Both tokens are saved to the Keychain before the new access token is used.
+  - **When a refresh fails** with `invalid_refresh_token` (for example after 30 idle days), the workspace shows "Reconnect", and the user re-authorises the same app (Allow only, no new setup token).
 - **Why these scopes:** history and read scopes find unread messages. `users:read` gives names. `search:read` powers the mention sweep. `chat:write` and `reactions:write` are for replies and reactions. The `*:write` conversation scopes exist only for `conversations.mark` (mark as read). They also permit channel management, and the README says so plainly. Splark never calls those methods.
 - **Manual fallback:** a "create from manifest" link, `https://api.slack.com/apps?new_app=1&manifest_json=<urlencoded>`, using the same manifest without the redirect or PKCE fields. The user clicks *Install to Workspace* and pastes the *User OAuth Token*.
 
