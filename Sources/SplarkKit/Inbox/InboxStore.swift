@@ -161,8 +161,14 @@ public final class InboxStore {
         for (key, snapshot) in snapshots {
             if excluded[key.teamId]?.contains(key.channelId) == true { continue }
             if let through = hidden[key], !SlackTS.isAfter(snapshot.newestTs, through) { continue }
-            // An older summary stays until the new one arrives; the heuristic covers conversations never summarised.
-            let triaged = results[key]?.items ?? [TriagePrompt.heuristic(snapshot)]
+            // An older summary stays until the new one arrives, unless the heuristic ranks the new messages higher
+            // (summaries may be paused for hours). The heuristic also covers conversations never summarised.
+            let heuristic = TriagePrompt.heuristic(snapshot)
+            var triaged = results[key]?.items ?? [heuristic]
+            if let result = results[key], result.newestTs != snapshot.newestTs,
+               let top = result.items.map(\.level).min(), heuristic.level < top {
+                triaged = [heuristic]
+            }
             let shown = snapshot.unread.suffix(10)
             for (slot, item) in triaged.enumerated() {
                 built.append(InboxItem(

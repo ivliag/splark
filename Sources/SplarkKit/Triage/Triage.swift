@@ -169,6 +169,10 @@ public actor Triage {
 
     private func requeue(_ batch: [ConversationSnapshot]) {
         for snapshot in batch where snapshots[snapshot.key] != nil { dirty.insert(snapshot.key) }
+        guard !dirty.isEmpty else { return }
+        // A removal during the request may have reset these; without them nothing would ever be retried.
+        firstDirty = firstDirty ?? .distantPast
+        lastDirty = lastDirty ?? .distantPast
     }
 
     private var pause: TriagePause? {

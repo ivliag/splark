@@ -41,6 +41,17 @@ func result(_ snapshot: ConversationSnapshot, _ items: [(TriageLevel, String)]) 
         #expect(s.items[0].lead == "Approve the rollback")   // until the new summary arrives
     }
 
+    @Test func anOldSummaryGivesWayWhenTheNewMessagesNeedYouMore() {
+        let s = store([dm, chatter])
+        s.apply([result(dm, [(.fyi, "Thanks, all good")]), result(chatter, [(.action, "Order coffee")])])
+        // Summaries are paused (usage limit); Marta asks something new in the DM, and #random moves on.
+        s.apply(update([snapshot("D1", kind: .dm, title: "Marta Ruiz", unread: [(ts(-600), "Marta Ruiz", "can you approve?", false), (ts(-5), "Marta Ruiz", "can you sign today?", false)]),
+                        snapshot("C2", title: "#random", unread: [(ts(-30), "Leo", "coffee?", false), (ts(-4), "Leo", "anyone?", false)])]))
+        let byChannel = Dictionary(uniqueKeysWithValues: s.items.map { ($0.key.channelId, $0) })
+        #expect(byChannel["D1"]?.level == .question && byChannel["D1"]?.byAI == false)   // the heuristic ranks it higher
+        #expect(byChannel["C2"]?.lead == "Order coffee")                                  // the old summary still ranks higher
+    }
+
     @Test(arguments: [
         ([] as [TriageLevel], "All caught up", SparkLevel.dimmed, 0),
         ([.fyi, .fyi], "Nothing needs you", .dimmed, 0),

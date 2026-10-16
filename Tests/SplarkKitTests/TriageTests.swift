@@ -216,6 +216,22 @@ func channelSnapshot(_ id: String, newest: Int = -60, kind: SnapshotKind = .chan
         #expect(delays == [60, 120, 240, 480, 960, 1800, 1800])
     }
 
+    @Test func aFailedRequestIsRetriedEvenIfSomethingWasRemovedMeanwhile() async {
+        let box = LockedBox<Triage?>(nil)
+        let llm = HookLLM {
+            // While the request is out, the user reads C2 in Slack, then the network drops.
+            if let t = box.value { await t.update(update([], removed: [ItemKey(teamId: "T1", channelId: "C2")])) }
+            throw LLMError.unavailable("offline")
+        }
+        let t = triage(llm)
+        box.value = t
+        await t.update(update([channelSnapshot("C1"), channelSnapshot("C2")]))
+        clock.advance(20)
+        #expect(await t.flushIfDue().isEmpty)
+        #expect(await t.waitingCount == 1)
+        #expect(await t.nextFlush == clock.now.addingTimeInterval(60))
+    }
+
     @Test func aChangeAfterEverythingWasRemovedWaitsTheFullTwentySeconds() async {
         let t = triage(FakeLLM.everything(.fyi))
         await t.update(update([channelSnapshot("C1")]))
@@ -236,6 +252,13 @@ func channelSnapshot(_ id: String, newest: Int = -60, kind: SnapshotKind = .chan
         #expect(request.instructions == TriagePrompt.instructions && request.schemaJSON == TriagePrompt.schemaJSON)
         #expect(request.input.contains(#""name":"Ivan""#))
     }
+}
+
+/// An LLM that runs `hook` (which may call back into triage) and then whatever it throws or returns.
+final class HookLLM: LLMClient, @unchecked Sendable {
+    let hook: @Sendable () async throws -> String
+    init(_ hook: @escaping @Sendable () async throws -> String) { self.hook = hook }
+    func respond(_ request: LLMRequest) async throws -> String { try await hook() }
 }
 
 extension FakeLLM {

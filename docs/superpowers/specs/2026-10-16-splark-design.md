@@ -291,7 +291,7 @@ The user's app is created with `apps.manifest.create`, using the pasted app conf
    - **When:** threads with `latest_reply` newer than the user's latest reply, and newer than the last time Splark cleared them, are fetched with `conversations.replies`.
    - **Clearing:** Slack has no thread read state. A thread item clears when the user replies in it, or marks it read in Splark.
      - **When the badge goes clear:** thread items clear too, but only once a lit badge (dot or count) has been seen since Slack started. A badge that never lights up says nothing. (With macOS badges off, `lsappinfo` still reports Slack's badge: see `docs/spikes.md`.)
-     - **Without a badge to trust:** a thread item clears 24 h after its newest reply.
+     - **In any case:** a thread item clears 24 h after its newest reply. Unread channels can keep Slack's badge at "•" for days, so a lit badge says nothing about threads.
 6. **Read in Slack.** Each check compares `last_read`. When it has passed an item's newest message, the item disappears.
 7. **Rate limits and errors.** A 429 pauses that method's bucket for `Retry-After`. `token_revoked`, `invalid_auth` and `account_inactive` mark the workspace "Token revoked" and stop its engine. `missing_scope` produces a "Reconnect to grant new permissions" prompt. Network failures back off exponentially (to a maximum of 5 minutes) and the panel shows "Offline, showing last results".
 
@@ -369,7 +369,7 @@ This follows OpenAI's open-source flow (developers.openai.com/siwc, "token shari
 - **Cache:** in memory, keyed by conversation ID and newest message ts. Nothing about messages is written to disk.
 - **Budget guard:** at most 30 requests per hour. Usage-limit errors pause triage until the time OpenAI gives, or for 30 minutes, and the header says so. Other failed requests are retried after a minute, doubling up to 30 minutes.
 - **Heuristic fallback** (signed out, paused, errors, or not yet triaged): DMs, group DMs, threads the user is in, and @mentions of the user are questions; everything else is just comments. Nothing is marked needs action without the AI. The lead is the first 8 words of the newest message, and the rest is the remainder, truncated.
-- **A conversation that changes keeps its last AI summary** until the new one arrives, rather than dropping to the heuristic for up to a minute.
+- **A conversation that changes keeps its last AI summary** until the new one arrives, rather than dropping to the heuristic for up to a minute. The exception is when the heuristic ranks the new messages higher (for example, a new DM question while summaries are paused): then the heuristic item shows.
 
 ## 8. Privacy and data
 

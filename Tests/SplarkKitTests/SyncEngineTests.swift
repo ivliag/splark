@@ -295,6 +295,19 @@ extension SyncEngine {
         #expect(!slack.calls.contains("conversations.replies C2"))   // two days old: before the first sweep's look-back
     }
 
+    @Test func aMentionOlderThanTheLookBackStaysOutOnLaterSweeps() async {
+        let slack = FakeSlack()
+        slack.addChannel("C2", kind: .publicChannel, name: "ops", lastRead: ts(-10))
+        slack.post("C2", slackMessage(ts(-3 * 86400), user: "U2", text: "old", replyCount: 1, latestReply: ts(-2 * 86400)))
+        slack.reply("C2", thread: ts(-3 * 86400), slackMessage(ts(-2 * 86400), user: "U3", text: "<@U1> old ask"))
+        slack.setSearch("<@U1>", [("C2", ts(-2 * 86400), ts(-3 * 86400))])   // the newest mention is two days old, already read
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        clock.advance(120)                                                    // the second sweep
+        _ = await engine.runUntilIdle()
+        #expect(!slack.calls.contains("conversations.replies C2"))
+    }
+
     @Test func aMentionSearchFindsLateIsStillHandled() async {
         let slack = FakeSlack()
         slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: ts(-10))
@@ -407,12 +420,13 @@ extension SyncEngine {
         #expect(await engine.runUntilIdle().removed.contains(thread))
     }
 
-    @Test func withATrustedBadgeAThreadItemWaits() async {
+    @Test func evenWithABadgeThatStaysLitAThreadItemClearsAfterADay() async {
+        // Unread channels can keep Slack's badge at "•" for days; threads read in Slack must still go.
         let engine = makeEngine(slackWithAThread(lastRead: ts(-3500)), clock)
         _ = await engine.runUntilIdle()
-        _ = await engine.badgeChanged(.count(1))
+        _ = await engine.badgeChanged(.dot)
         clock.advance(25 * 3600)
-        #expect(!(await engine.runUntilIdle().removed.contains(thread)))
+        #expect(await engine.runUntilIdle().removed.contains(thread))
     }
 
     @Test func aThreadMarkedReadStaysClearedAfterARestart() async {

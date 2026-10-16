@@ -56,7 +56,7 @@ public actor SyncEngine {
         public var sweepInterval: TimeInterval = 120
         public var firstSweepLookback: TimeInterval = 86400
         public var sweepOverlap: TimeInterval = 600            // search indexes late: look again at the last 10 minutes
-        public var threadExpiry: TimeInterval = 86400         // thread items clear after a day when there's no badge to trust
+        public var threadExpiry: TimeInterval = 86400         // thread items clear a day after their newest reply
         public var unreadHorizon: TimeInterval = 14 * 86400   // older unread messages are left out
         public var historyLimit = 40
         public var contextCount = 3
@@ -89,7 +89,7 @@ public actor SyncEngine {
     private var inventoryLoaded = false
     private var sweptHits: [String: Date] = [:]        // "channel/ts" of search hits already handled, within the overlap
     private var badge: SlackBadge?
-    private var badgeSeenLit = false   // a clear badge counts only after a lit one: badges may be off in macOS
+    private var badgeSeenLit = false   // a clear badge counts only after a lit one has been seen since Slack started
     private var failures = 0
     public private(set) var memory: SyncMemory
     public private(set) var snapshots: [ItemKey: ConversationSnapshot] = [:]
@@ -315,7 +315,8 @@ public actor SyncEngine {
         memory.threads.checked(channelId: watch.channelId, threadTs: watch.threadTs, newestReply: SlackTS.latest(fetched.map(\.ts)), now: now)
 
         guard let first = unread.first, let newest = unread.last else { return removing(key) }
-        if !badgeSeenLit, now.timeIntervalSince(SlackTS.date(newest.ts)) > config.threadExpiry {
+        // Slack has no thread read state, and its badge can stay lit for days: a thread item goes a day after its newest reply.
+        if now.timeIntervalSince(SlackTS.date(newest.ts)) > config.threadExpiry {
             memory.threads.clear(channelId: watch.channelId, threadTs: watch.threadTs, through: newest.ts)
             return removing(key)
         }
@@ -333,8 +334,9 @@ public actor SyncEngine {
     /// Thread hits start watches; a top-level mention makes its conversation due now.
     private func sweep(now: Date) async throws -> SyncUpdate {
         let me = workspace.userId
-        let since = memory.sweptThrough.map { SlackTS.ts(SlackTS.date($0).addingTimeInterval(-config.sweepOverlap)) }
-            ?? SlackTS.ts(now.addingTimeInterval(-config.firstSweepLookback))
+        // Never further back than the first sweep's look-back, however old the last mention handled.
+        let since = SlackTS.latest(memory.sweptThrough.map { SlackTS.ts(SlackTS.date($0).addingTimeInterval(-config.sweepOverlap)) },
+                                   SlackTS.ts(now.addingTimeInterval(-config.firstSweepLookback)))!
         let mentions = try await slack.searchMessages("<@\(me)>", count: 20).messages.matches
         // Best effort: finds threads the user replied to in Slack itself. Never let it stop the mention sweep.
         let replies = (try? await slack.searchMessages("from:<@\(me)>", count: 20))?.messages.matches ?? []
@@ -358,7 +360,8 @@ public actor SyncEngine {
             guard let threadTs = hit.threadTs, threadTs != hit.ts else { continue }
             memory.threads.userReplied(channelId: hit.channel.id, threadTs: threadTs, ts: hit.ts, now: now)
         }
-        memory.sweptThrough = SlackTS.latest([memory.sweptThrough] + mentions.map(\.ts))   // the user's own messages don't move it
+        // Only mentions inside the window move the mark; the user's own messages don't.
+        memory.sweptThrough = SlackTS.latest([memory.sweptThrough] + mentions.map(\.ts).filter { SlackTS.isAfter($0, since) })
         sweepDue = now.addingTimeInterval(config.sweepInterval)
         return SyncUpdate()
     }
