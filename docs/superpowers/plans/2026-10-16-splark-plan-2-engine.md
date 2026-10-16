@@ -36,7 +36,7 @@ Ivan: these are the calls to check. Each is already in the spec update on this b
    - **Also:** overdue work is served oldest first, so nothing starves. A badge change still checks every DM straight away.
 2. **Unread messages older than 14 days are left out.** This bounds the first catch-up and the ChatGPT cost. A channel unread since March is not news.
 3. **A clear badge clears thread items only after a lit badge has been seen** since Slack started.
-   - **Why:** macOS can hide Slack's badge, and a badge that never lights up says nothing.
+   - **Why:** a badge that never lights up says nothing. With macOS badges off, `lsappinfo` still reports Slack's badge (tested), so this is only a cheap safeguard.
    - **Without a badge to trust,** thread items clear after a day, as the spec says.
 4. **The mention sweep also searches for the user's own messages** (`from:<@me>`).
    - **Why:** that finds threads the user replied to in Slack itself, so replies in them show up.
@@ -107,7 +107,7 @@ Ivan: these are the calls to check. Each is already in the spec update on this b
 The inputs the spec implies that a person will actually hit, each pinned by a test in the task that owns the code:
 
 1. **A DM that was never opened** has `last_read` `"0000000000.000000"`, which Slack refuses as `oldest`. Its unread messages must still show, counted by `unread_count_display`. *Task 8:* `aDMThatWasNeverOpenedUsesSlacksUnreadCount`. `FakeSlack` refuses a zero `oldest`, as Slack does.
-2. **macOS badges turned off for Slack:** a badge stuck at "clear" must not wipe thread items. *Task 9:* `aClearBadgeClearsThreadsOnlyOnceTheBadgeHasBeenSeenLit`.
+2. **A badge that never lights up** (Slack's badge turned off, or Slack just started): a badge stuck at "clear" must not wipe thread items. *Task 9:* `aClearBadgeClearsThreadsOnlyOnceTheBadgeHasBeenSeenLit`.
 3. **A model answer that isn't what was asked:**
    - prose instead of JSON, unknown conversation IDs, invented levels or over-long leads;
    - message text that tries to steer the model.
@@ -870,7 +870,7 @@ with:
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 61 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -1295,7 +1295,7 @@ public actor SlackTokenManager: SlackTokenSource {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 74 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -1946,7 +1946,7 @@ with:
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 84 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -2264,7 +2264,7 @@ with:
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 91 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -2535,7 +2535,7 @@ public actor UserDirectory {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 99 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -2930,7 +2930,7 @@ public struct SyncSchedule: Sendable {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 109 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -3178,7 +3178,7 @@ public struct ThreadTracker: Codable, Sendable, Equatable {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 118 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -3967,7 +3967,7 @@ public actor SyncEngine {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 136 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -4988,7 +4988,7 @@ public actor SyncEngine {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 153 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -5518,7 +5518,7 @@ with:
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 165 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -5870,7 +5870,7 @@ public enum TriagePrompt {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 174 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -6358,7 +6358,7 @@ public actor Triage {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 189 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -6725,7 +6725,7 @@ public final class InboxStore {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 199 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -7086,7 +7086,7 @@ public final class Actions {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 211 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -7283,7 +7283,7 @@ public struct StateStore: Sendable {
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 217 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -7901,7 +7901,7 @@ with:
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 224 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -8167,7 +8167,7 @@ with:
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `swift test`
-Expected: PASS, `✔ Test run with ? tests`. `swift build --build-tests` prints no warnings.
+Expected: PASS, `✔ Test run with 228 tests`. `swift build --build-tests` prints no warnings.
 
 - [ ] **Step 5: Commit**
 
@@ -8247,7 +8247,7 @@ Then replace each parenthesis with what happened.
 - [ ] **Step 3: Run everything one last time**
 
 Run: `swift test && ./scripts/build-app.sh release`
-Expected: `✔ Test run with ? tests`, then `build/Splark.app`.
+Expected: `✔ Test run with 228 tests`, then `build/Splark.app`.
 
 - [ ] **Step 4: Commit and push**
 

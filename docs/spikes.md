@@ -9,9 +9,9 @@ What the spec's §13 risks turned out to be, measured on real accounts. Plans 2 
 - Everything read: `splark-dev badge` → `none` (2026-10-16 10:19)
 - (After the final review, `SlackBadge.none` was renamed `.clear`; the readings below are as printed at the time.)
 - DM or mention arrives: `10:46:52  count(1)`. Read it: `10:47:13  none`. Both picked up within the 2 s poll.
-- macOS "Badge application icon" off: **not yet run**. If it makes `lsappinfo` report an empty label rather than nothing, Splark would read "clear" while unread messages exist. Run this before writing Plan 2.
+- macOS "Badge application icon" off (2026-10-16 15:48–15:52, run by Ivan): `lsappinfo` kept reporting Slack's badge, `count(1)` → `count(2)` → `count(3)` → `count(2)` → `count(1)` → `clear`, as messages arrived and were read. The StatusLabel is Slack's own badge, not what macOS shows in the Dock.
 - Slack quit: not exercised against the real app. A unit test covers that `current()` is nil when Slack isn't running.
-- **Decision:** the badge signal works for none / dot / count on macOS 26.5.1 and is used as a trigger. How it behaves with macOS badges off is unknown, so Plan 2 keeps it optional, as the spec says: schedule-only polling when it's unavailable, and Settings shows whether it's available.
+- **Decision:** the badge signal works for clear / dot / count on macOS 26.5.1, with macOS badges on or off, and is used as a trigger. It stays optional, as the spec says: schedule-only polling when it's unavailable, and Settings shows whether it's available. Plan 2 still lets a clear badge clear thread items only after a lit one has been seen since Slack started. That is a cheap safeguard for a badge that never lights up.
 
 ## 1. Private Slack app with PKCE
 

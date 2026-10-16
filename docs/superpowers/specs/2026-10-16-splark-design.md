@@ -290,7 +290,7 @@ The user's app is created with `apps.manifest.create`, using the pasted app conf
    - **Which threads:** ones the user started or replied to, seen in fetched history or in Splark's own record of sent replies (kept for 7 days).
    - **When:** threads with `latest_reply` newer than the user's latest reply, and newer than the last time Splark cleared them, are fetched with `conversations.replies`.
    - **Clearing:** Slack has no thread read state. A thread item clears when the user replies in it, or marks it read in Splark.
-     - **When the badge goes clear:** thread items clear too, but only once a lit badge (dot or count) has been seen since Slack started. macOS can hide Slack's badge, and a badge that never lights up says nothing.
+     - **When the badge goes clear:** thread items clear too, but only once a lit badge (dot or count) has been seen since Slack started. A badge that never lights up says nothing. (With macOS badges off, `lsappinfo` still reports Slack's badge: see `docs/spikes.md`.)
      - **Without a badge to trust:** a thread item clears 24 h after its newest reply.
 6. **Read in Slack.** Each check compares `last_read`. When it has passed an item's newest message, the item disappears.
 7. **Rate limits and errors.** A 429 pauses that method's bucket for `Retry-After`. `token_revoked`, `invalid_auth` and `account_inactive` mark the workspace "Token revoked" and stop its engine. `missing_scope` produces a "Reconnect to grant new permissions" prompt. Network failures back off exponentially (to a maximum of 5 minutes) and the panel shows "Offline, showing last results".
@@ -438,7 +438,7 @@ splark/
 Each is verified at the start of implementation, before the code that depends on it.
 
 1. **Slack app creation and PKCE:** `apps.manifest.create` with `pkce_enabled` and a `http://localhost:<port>` redirect; authorise and exchange without a client secret. *Fallback if this fails:* the manual-token path. **Result:** works, but tokens rotate every 12 hours (see §6.1 and `docs/spikes.md`).
-2. **The badge:** `lsappinfo` returns Slack's badge label from an unsandboxed app on macOS 14–26, including when macOS badges for Slack are turned off. *If not:* schedule-only polling (already supported).
+2. **The badge:** `lsappinfo` returns Slack's badge label from an unsandboxed app on macOS 14–26, including when macOS badges for Slack are turned off. *If not:* schedule-only polling (already supported). **Result:** works on macOS 26.5.1, with macOS badges on and off.
 3. **Sign in with ChatGPT** from a native app: dynamic registration, `GET /v1/models` contents, and `text.format` JSON schema support with plan tokens. *If the schema is unsupported:* JSON-only prompting. **Result:** works with a `urn:uuid` host ID, a list-shaped `input` and the plan-token models shape (see §7). json_schema output works.
 4. **Mention sweep:** `search.messages` with `<@Uxxxx>` returns mentions. *If not:* search for the user's display name, or drop the sweep and rely on history.
 5. **Internal-app rate limits:** confirm that the user's private app gets Tier 3 limits, not the 1-request-per-minute limit that applies to distributed apps.
