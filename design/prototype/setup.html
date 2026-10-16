@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Splark — setup prototype</title>
+<style>
+  :root {
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --win: rgba(250, 250, 252, 0.92);
+    --win-border: rgba(0,0,0,0.10);
+    --text: #3a3a3e; --text-2: #7d7d83; --text-3: #adadb3;
+    --spark: #6a6a70;
+    --field: rgba(255,255,255,0.95); --field-border: rgba(0,0,0,0.12);
+    --chip: rgba(0,0,0,0.05); --sep: rgba(0,0,0,0.07);
+    --btn: #4a4a50; --btn-text: #f4f4f6;
+    --ok: #7d7d83; --warn: #3a3a3e; --err: #3a3a3e;
+    --tile: #4a4a50; --tile-fg: #e6e6ea;
+  }
+  body.dark {
+    --win: rgba(40,40,44,0.92); --win-border: rgba(255,255,255,0.10);
+    --text: #dcdce0; --text-2: #98989e; --text-3: #696970;
+    --spark: #b4b4ba;
+    --field: rgba(0,0,0,0.25); --field-border: rgba(255,255,255,0.12);
+    --chip: rgba(255,255,255,0.07); --sep: rgba(255,255,255,0.08);
+    --btn: #d0d0d5; --btn-text: #232327;
+    --ok: #98989e; --warn: #dcdce0; --err: #dcdce0;
+    --tile: #5a5a60; --tile-fg: #ececf0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; font-family: var(--font); -webkit-font-smoothing: antialiased; }
+  body { background: #e9e9ee; display: flex; flex-direction: column; align-items: center; padding: 18px 18px 40px; color: var(--text); }
+  body.dark { background: #111114; }
+  .page-head { flex: none; width: 1180px; max-width: 100%; display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; color: #3a3a3e; }
+  body.dark .page-head { color: #dcdce0; }
+  .page-head h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.01em; }
+  .page-head p { margin: 0; font-size: 13px; opacity: 0.75; max-width: 700px; line-height: 1.45; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 460px; }
+  .seg { display: inline-flex; background: rgba(0,0,0,0.07); border-radius: 9px; padding: 2px; }
+  body.dark .seg { background: rgba(255,255,255,0.1); }
+  .seg button { font: 500 12.5px var(--font); border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer; color: inherit; }
+  .seg button.on { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+  body.dark .seg button.on { background: #5a5a60; }
+  .ctl { font: 500 12.5px var(--font); color: inherit; display: inline-flex; gap: 6px; align-items: center; background: rgba(0,0,0,0.05); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+  body.dark .ctl { background: rgba(255,255,255,0.08); }
+
+  .screen { flex: none; position: relative; width: 1180px; max-width: 100%; height: 720px; border-radius: 14px; overflow: hidden;
+    background: radial-gradient(1200px 700px at 15% 110%, #f7b267 0%, transparent 55%), radial-gradient(900px 600px at 95% 0%, #6c8cff 0%, transparent 60%),
+                radial-gradient(800px 700px at 55% 60%, #c86dd7 0%, transparent 60%), linear-gradient(160deg, #3a4fd8, #7b3fa8 55%, #e0795a);
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 30px 80px rgba(0,0,0,0.25); }
+  body.dark .screen { filter: saturate(0.9) brightness(0.72); }
+  body.dark .screen .window { filter: brightness(1.38) saturate(1.1); }
+  .menubar { position: absolute; inset: 0 0 auto 0; height: 26px; background: rgba(255,255,255,0.35); backdrop-filter: blur(30px); display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 12px; font-size: 13px; color: #1d1d1f; }
+  body.dark .menubar { background: rgba(30,30,34,0.35); color: #f5f5f7; }
+  .menubar .tray { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 6px; border-radius: 6px; font: 600 12px var(--font); opacity: 0; transition: opacity .4s; }
+  .menubar .tray.show { opacity: 1; background: rgba(127,127,127,0.22); }
+
+  .window { width: 560px; min-height: 520px; background: var(--win); backdrop-filter: blur(40px) saturate(1.6); -webkit-backdrop-filter: blur(40px) saturate(1.6);
+    border-radius: 22px; box-shadow: 0 24px 70px rgba(0,0,0,0.28), 0 0 0 0.5px var(--win-border); display: flex; flex-direction: column; overflow: hidden; }
+  .titlebar { height: 40px; display: flex; align-items: center; padding: 0 16px; gap: 8px; flex: none; }
+  .tl { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.15); }
+  .tl.y { background: #febc2e; } .tl.g { background: #28c840; opacity: .35; }
+  .steps { margin-left: auto; margin-right: auto; transform: translateX(-30px); display: flex; gap: 14px; color: var(--spark); }
+  .steps .st { display: flex; align-items: center; }
+  .content { flex: 1; padding: 18px 44px 30px; display: flex; flex-direction: column; }
+  .center { text-align: center; align-items: center; }
+  h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 6px 0 8px; color: var(--text); }
+  .lead { font-size: 13.5px; line-height: 1.5; color: var(--text-2); margin: 0 0 18px; }
+  .lead b { color: var(--text); font-weight: 600; }
+  .px { display: block; shape-rendering: crispEdges; }
+  .appicon { display: block; filter: drop-shadow(0 8px 18px rgba(0,0,0,0.18)); margin: 18px auto 8px; }
+  .points { list-style: none; padding: 0; margin: 4px 0 22px; display: flex; flex-direction: column; gap: 11px; text-align: left; width: 100%; max-width: 400px; }
+  .points li { display: grid; grid-template-columns: 11px 1fr; gap: 12px; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+  .points li .mk { height: 19px; display: flex; align-items: center; color: var(--spark); }
+  .points li b { color: var(--text); font-weight: 600; }
+  .spacer { flex: 1; }
+  .actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
+  .actions .note { margin-right: auto; font-size: 11.5px; color: var(--text-3); }
+  .btn { font: 600 13px var(--font); border: 0; border-radius: 10px; padding: 9px 18px; cursor: pointer; background: var(--btn); color: var(--btn-text); }
+  .btn.secondary { background: var(--chip); color: var(--text); font-weight: 500; }
+  .btn.ghost { background: transparent; color: var(--text-2); font-weight: 500; padding: 9px 10px; }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+  .btn.wide { width: 100%; padding: 11px 18px; }
+  .link { color: var(--text); text-decoration: underline; text-decoration-color: var(--text-3); text-underline-offset: 2px; cursor: pointer; }
+
+  .howto { display: flex; flex-direction: column; gap: 12px; margin: 0 0 16px; }
+  .howto .s { display: grid; grid-template-columns: 22px 1fr; gap: 10px; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+  .howto .n { width: 22px; height: 22px; border-radius: 5px; background: var(--chip); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
+  .howto b { color: var(--text); font-weight: 600; }
+  .mini-btn { font: 500 12px var(--font); border: 0; border-radius: 7px; padding: 4px 9px; background: var(--chip); color: var(--text); cursor: pointer; margin-top: 6px; }
+  .field { display: flex; gap: 8px; }
+  .field input { flex: 1; font: 12.5px ui-monospace, "SF Mono", Menlo, monospace; color: var(--text); background: var(--field); border: 0; box-shadow: inset 0 0 0 1px var(--field-border); border-radius: 9px; padding: 10px 12px; outline: none; }
+  .field input:focus { box-shadow: inset 0 0 0 1.5px var(--text-2); }
+  .field input::placeholder { color: var(--text-3); font-family: var(--font); }
+  .hint { font-size: 11.5px; color: var(--text-3); margin-top: 7px; line-height: 1.45; }
+  .msg { font-size: 12.5px; line-height: 1.45; margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--chip); color: var(--text-2); }
+  .msg b { color: var(--text); font-weight: 600; }
+  .msg { display: grid; grid-template-columns: 11px 1fr; gap: 10px; } .msg .mk { padding-top: 3px; color: var(--spark); }
+  .status { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); padding: 12px 0; }
+  .spinner { position: relative; width: 11px; height: 11px; flex: none; color: var(--spark); }
+  .spinner .px { position: absolute; inset: 0; opacity: 0; animation: pulse 1.2s steps(1) infinite; }
+  .spinner .px:nth-child(2) { animation-delay: .4s; } .spinner .px:nth-child(3) { animation-delay: .8s; }
+  @keyframes pulse { 0% { opacity: 1; } 33.3% { opacity: 0; } 100% { opacity: 0; } }
+  .ws-list { display: flex; flex-direction: column; gap: 0; margin: 2px 0 12px; border-radius: 12px; background: var(--chip); }
+  .ws { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: center; padding: 11px 14px; }
+  .ws + .ws { border-top: 0.5px solid var(--sep); }
+  .ws .av { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; gap: 2px; background: var(--tile); color: var(--tile-fg); }
+  .ws .nm { font-size: 13px; font-weight: 600; color: var(--text); }
+  .ws .sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .ws .ok { font-size: 12px; color: var(--ok); display: flex; align-items: center; gap: 6px; }
+  details.perm { margin-top: 12px; font-size: 12px; color: var(--text-2); }
+  details.perm summary { cursor: pointer; color: var(--text-2); list-style: none; }
+  details.perm summary::before { content: "› "; display: inline-block; transition: transform .15s; }
+  details.perm[open] summary::before { transform: rotate(90deg); }
+  details.perm ul { margin: 8px 0 0; padding-left: 16px; line-height: 1.6; }
+  .gpt { display: flex; align-items: center; justify-content: center; gap: 9px; }
+  .gpt svg { width: 17px; height: 17px; }
+  .acct { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; background: var(--chip); margin-bottom: 14px; }
+  .acct .av { width: 34px; height: 34px; border-radius: 8px; background: var(--tile); color: var(--tile-fg); display: flex; align-items: center; justify-content: center; }
+  .acct .nm { font-size: 13px; font-weight: 600; } .acct .sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .toggles { display: flex; flex-direction: column; border-radius: 12px; background: var(--chip); margin: 6px 0 18px; text-align: left; width: 100%; max-width: 400px; }
+  .tg { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px; font-size: 13px; color: var(--text); }
+  .tg + .tg { border-top: 0.5px solid var(--sep); }
+  .tg small { display: block; color: var(--text-3); font-size: 11.5px; margin-top: 1px; }
+  .sw { width: 34px; height: 20px; border-radius: 10px; background: #8e8e94; position: relative; flex: none; cursor: pointer; transition: background .15s; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+  .sw.on { background: #55555b; } body.dark .sw.on { background: #a8a8ae; } .sw.on::after { left: 16px; }
+  .pointer { position: absolute; top: 34px; right: 118px; color: #fff; font-size: 13px; text-align: right; text-shadow: 0 1px 6px rgba(0,0,0,0.35); opacity: 0; transition: opacity .4s; pointer-events: none; }
+  .pointer.show { opacity: 1; }
+  .browser-toast { position: absolute; right: 24px; bottom: 24px; width: 300px; background: rgba(255,255,255,0.92); border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.25); padding: 12px 14px; font-size: 12.5px; color: #3a3a3e; opacity: 0; transform: translateY(10px); transition: all .25s; }
+  .browser-toast.show { opacity: 1; transform: none; }
+  .browser-toast .url { font: 11px ui-monospace, Menlo, monospace; color: #8a8a90; margin-bottom: 6px; }
+  .browser-toast .row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .browser-toast button { font: 600 12.5px var(--font); border: 0; border-radius: 8px; padding: 6px 14px; background: #2a7a4b; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <div>
+    <h1>Setup: welcome → Slack → ChatGPT → done</h1>
+    <p>Click through it like the real app. The fake browser card in the bottom-right corner stands in for Slack's and OpenAI's own pages: click <b>Allow</b> there to continue. The switches on the right simulate things going wrong.</p>
+  </div>
+  <div class="controls">
+    <div class="seg" id="themeSeg"><button data-t="light" class="on">Light</button><button data-t="dark">Dark</button></div>
+    <label class="ctl"><input type="checkbox" id="simBadToken"> Token won't work</label>
+    <label class="ctl"><input type="checkbox" id="simApproval"> Workspace needs admin approval</label>
+    <button class="ctl" id="restart" style="border:0">Restart</button>
+  </div>
+</div>
+
+<div class="screen">
+  <div class="menubar"><span class="tray" id="tray"></span><span>Thu 15 Oct&nbsp;&nbsp;14:32</span></div>
+  <div class="pointer" id="pointer">Click the spark any time to catch up&nbsp;↗</div>
+  <div class="window">
+    <div class="titlebar"><span class="tl"></span><span class="tl y"></span><span class="tl g"></span><div class="steps" id="steps"></div></div>
+    <div class="content" id="content"></div>
+  </div>
+  <div class="browser-toast" id="browser"></div>
+</div>
+
+<script>
+const SOFT = ['.....#.....', '.....#.....', '....###....', '...#####...', '..#######..', '###########', '..#######..', '...#####...', '....###....', '.....#.....', '.....#.....'];
+const lit = (x, y) => y >= 0 && y < 11 && x >= 0 && x < 11 && SOFT[y][x] === '#';
+function onPx(x, y, t) {
+  if (!lit(x, y)) return false;
+  if (t === 'full') return true;
+  if (t === 'dim') return x % 2 === 1 && y % 2 === 1;
+  return !lit(x - 1, y) || !lit(x + 1, y) || !lit(x, y - 1) || !lit(x, y + 1) || (x + y) % 2 === 0;
+}
+function spark(t, scale = 1, color = 'currentColor') {
+  let r = ''; for (let y = 0; y < 11; y++) for (let x = 0; x < 11; x++) if (onPx(x, y, t)) r += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  return `<svg class="px" width="${11 * scale}" height="${11 * scale}" viewBox="0 0 11 11" fill="${color}">${r}</svg>`;
+}
+function appIcon(size) {
+  const N = 40, OFF = 9, big = (x, y) => x >= OFF && y >= OFF && x < OFF + 22 && y < OFF + 22 && lit(Math.floor((x - OFF) / 2), Math.floor((y - OFF) / 2));
+  let r = '';
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let d = 99; for (let dy = -5; dy <= 5 && d > 0; dy++) for (let dx = -5; dx <= 5; dx++) if (big(x + dx, y + dy)) d = Math.min(d, Math.hypot(dx, dy));
+    let on = false, c = '#e6e6ea';
+    if (d === 0) on = true; else if (d <= 2) { on = (x + y) % 2 === 0; c = '#9c9ca4'; } else if (d <= 3.6) { on = x % 2 === 0 && y % 2 === 0; c = '#9c9ca4'; } else if (d <= 5) { on = x % 4 === 0 && y % 4 === 2; c = '#9c9ca4'; }
+    if (on) r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${c}"/>`;
+  }
+  return `<svg class="appicon" width="${size}" height="${size}" viewBox="0 0 100 100"><defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3a40"/><stop offset="1" stop-color="#26262b"/></linearGradient></defs><rect width="100" height="100" rx="22.4" fill="url(#gg)"/><svg x="10" y="10" width="80" height="80" viewBox="0 0 40 40" shape-rendering="crispEdges">${r}</svg></svg>`;
+}
+const FONT = {
+  L: ['1....', '1....', '1....', '1....', '1....', '1....', '11111'],
+  C: ['.111.', '1...1', '1....', '1....', '1....', '1...1', '.111.'],
+  I: ['111', '.1.', '.1.', '.1.', '.1.', '.1.', '111'],
+  '1': ['.1.', '11.', '.1.', '.1.', '.1.', '.1.', '111'],
+  '2': ['.111.', '1...1', '....1', '...1.', '..1..', '.1...', '11111']
+};
+function glyph(ch, scale = 2) {
+  const g = FONT[ch]; let r = '';
+  g.forEach((row, y) => [...row].forEach((c, x) => { if (c === '1') r += `<rect x="${x}" y="${y}" width="1" height="1"/>`; }));
+  return `<svg class="px" width="${g[0].length * scale}" height="${7 * scale}" viewBox="0 0 ${g[0].length} 7" fill="currentColor">${r}</svg>`;
+}
+const pxText = (str, scale) => [...str].map(ch => glyph(ch, scale)).join('');
+const SPIN = `<span class="spinner">${spark('dim')}${spark('mid')}${spark('full')}</span>`;
+const OPENAI = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.3 9.8a6 6 0 0 0-.5-4.9 6 6 0 0 0-6.5-2.9A6 6 0 0 0 4.9 4.1 6 6 0 0 0 1 7a6 6 0 0 0 .7 7.1 6 6 0 0 0 .5 4.9 6 6 0 0 0 6.5 2.9A6 6 0 0 0 13.2 24a6 6 0 0 0 5.7-4.1 6 6 0 0 0 4-2.9 6 6 0 0 0-.7-7.2zm-9 12.6a4.5 4.5 0 0 1-2.9-1l.1-.1 4.8-2.8a.8.8 0 0 0 .4-.7v-6.8l2 1.2v5.6a4.5 4.5 0 0 1-4.4 4.6zm-9.7-4.1a4.5 4.5 0 0 1-.5-3l.1.1 4.8 2.8a.8.8 0 0 0 .8 0l5.9-3.4v2.3l-4.9 2.8a4.5 4.5 0 0 1-6.2-1.6zM2.3 7.9a4.5 4.5 0 0 1 2.4-2v5.7a.8.8 0 0 0 .4.7l5.9 3.4-2 1.2-4.9-2.8a4.5 4.5 0 0 1-1.8-6.2zm16.6 3.9-5.9-3.4 2-1.2 4.9 2.8a4.5 4.5 0 0 1-.7 8.1v-5.6a.8.8 0 0 0-.3-.7zm2-3-.1-.1-4.8-2.8a.8.8 0 0 0-.8 0L9.4 9.2V6.9l4.9-2.8a4.5 4.5 0 0 1 6.7 4.7zM8.3 12.9l-2-1.2V6.1a4.5 4.5 0 0 1 7.4-3.5l-.1.1-4.8 2.8a.8.8 0 0 0-.4.7zm1.1-2.4 2.6-1.5 2.6 1.5v3l-2.6 1.5-2.6-1.5z"/></svg>';
+
+const $ = s => document.querySelector(s);
+let step = 0, slackState = 'idle', workspaces = [], aiState = 'idle', loginItem = true, showCount = true;
+const STEP_NAMES = ['Welcome', 'Slack', 'ChatGPT', 'Done'];
+
+function renderSteps() {
+  $('#steps').innerHTML = STEP_NAMES.map((n, i) => `<span class="st" title="${n}">${spark(i < step ? 'mid' : i === step ? 'full' : 'dim')}</span>`).join('');
+}
+function browser(html) { const b = $('#browser'); if (!html) { b.classList.remove('show'); return; } b.innerHTML = html; b.classList.add('show'); }
+
+function render() {
+  renderSteps();
+  const c = $('#content');
+  if (step === 0) {
+    c.className = 'content center';
+    c.innerHTML = `${appIcon(84)}
+      <h2>Splark</h2>
+      <p class="lead">Slack, sorted by what needs you.<br>Click the spark in your menu bar to see what's unread, summarised and ranked.</p>
+      <ul class="points">
+        <li><span class="mk">${spark('full')}</span><span><b>Needs action</b> first, then <b>questions for you</b>, then everything else folded away.</span></li>
+        <li><span class="mk">${spark('mid')}</span><span><b>Reply, react or mark as read</b> right from the menu bar. Nothing is sent until you press send.</span></li>
+        <li><span class="mk">${spark('dim')}</span><span><b>Private by design.</b> Your Slack messages go only to your own ChatGPT account for summaries. There's no Splark server.</span></li>
+      </ul>
+      <div class="spacer"></div>
+      <div class="actions" style="width:100%"><span class="note">Takes about two minutes.</span><button class="btn" id="next">Get started</button></div>`;
+    $('#next').onclick = () => { step = 1; render(); };
+  }
+  if (step === 1) {
+    c.className = 'content';
+    let body = '';
+    if (workspaces.length) {
+      body += `<div class="ws-list">${workspaces.map(w => `<div class="ws"><div class="av">${pxText(w.initial, 2)}</div><div><div class="nm">${w.name}</div><div class="sub">${w.domain}.slack.com · as ${w.user}</div></div><span class="ok">${spark('full', 1)}Connected</span></div>`).join('')}</div>`;
+    }
+    if (slackState === 'idle' || slackState === 'error' || slackState === 'approval') {
+      body += `<div class="howto">
+          <div class="s"><span class="n">${glyph('1', 2)}</span><div>Open Slack's app settings and, under <b>Your App Configuration Tokens</b>, click <b>Generate Token</b> for the workspace you want.<br><button class="mini-btn" id="openSlackApi">Open api.slack.com/apps ↗</button></div></div>
+          <div class="s"><span class="n">${glyph('2', 2)}</span><div>Copy the <b>access token</b> and paste it here. Splark uses it once to create your own private Slack app, then forgets it.</div></div>
+        </div>
+        <div class="field"><input id="token" placeholder="Paste access token (xoxe.xoxp-…)" spellcheck="false"><button class="btn" id="create" disabled>Connect</button></div>
+        <div class="hint">The app lives only in your workspace and only you install it. Your Slack token is stored in your Mac's Keychain.</div>`;
+      if (slackState === 'error') body += `<div class="msg err"><span class="mk">${spark('full')}</span><span><b>That token didn't work.</b> Setup tokens expire after 12 hours and are tied to one workspace. Generate a fresh one and paste it again.</span></div>`;
+      if (slackState === 'approval') body += `<div class="msg warn"><span class="mk">${spark('mid')}</span><span><b>Your workspace needs an admin to approve new apps.</b> Slack has sent them your request. Once it's approved, open Splark's Settings and click <b>Finish connecting</b>. You can carry on with setup meanwhile.</span></div>`;
+      body += `<details class="perm"><summary>What Splark can do in Slack</summary><ul>
+          <li>Read messages in conversations you're already in, to find what's unread</li>
+          <li>Send replies and reactions as you, only when you click</li>
+          <li>Mark conversations as read when you ask it to</li>
+          <li>Nothing in channels you're not a member of</li></ul></details>`;
+    }
+    if (slackState === 'creating') body += `<div class="status">${SPIN}Creating your private Slack app…</div>`;
+    if (slackState === 'allow') body += `<div class="status">${SPIN}Waiting for you to click <b style="color:var(--text);font-weight:600">Allow</b> in your browser…</div>`;
+    const canContinue = workspaces.length > 0 || slackState === 'approval';
+    c.innerHTML = `<h2>Connect Slack</h2>
+      <p class="lead">${workspaces.length ? 'Add another workspace the same way, or continue.' : 'Splark reads your Slack through a <b>private app that only you install</b>, so there are no shared servers and no rate limits from a public app.'}</p>
+      ${body}
+      <div class="spacer"></div>
+      <div class="actions" style="margin-top:18px">
+        ${workspaces.length && slackState === 'done' ? `<button class="btn ghost" id="addAnother">+ Add another workspace</button>` : ''}
+        <button class="btn secondary" id="back">Back</button>
+        <button class="btn" id="next" ${canContinue ? '' : 'disabled'}>Continue</button>
+      </div>`;
+    const tok = $('#token');
+    if (tok) {
+      tok.oninput = () => { $('#create').disabled = !tok.value.trim(); };
+      $('#openSlackApi').onclick = () => browser(`<div class="url">api.slack.com/apps</div><b>Your App Configuration Tokens</b><div class="row"><span style="color:#8a8a90">Lumen · access token copied</span><button id="fakeCopy">Generate Token</button></div>`) || setTimeout(() => { const fc = $('#fakeCopy'); if (fc) fc.onclick = () => { tok.value = 'xoxe.xoxp-1-Mi0yLTE3ODI…'; tok.dispatchEvent(new Event('input')); browser(null); }; }, 0);
+      $('#create').onclick = () => {
+        if ($('#simBadToken').checked) { slackState = 'error'; render(); return; }
+        slackState = 'creating'; render();
+        setTimeout(() => {
+          slackState = 'allow'; render();
+          if ($('#simApproval').checked) {
+            browser(`<div class="url">slack.com/oauth/v2/authorize</div><b>Splark (private) wants to access Lumen</b><div class="row"><span style="color:#a86b1f">Needs admin approval</span><button id="fakeAllow">Request to install</button></div>`);
+            setTimeout(() => { $('#fakeAllow').onclick = () => { browser(null); slackState = 'approval'; render(); }; }, 0);
+          } else {
+            browser(`<div class="url">slack.com/oauth/v2/authorize</div><b>Splark (private) wants to access ${workspaces.length ? 'Lumen Community' : 'Lumen'}</b><div class="row"><span style="color:#8a8a90">as Ivan</span><button id="fakeAllow">Allow</button></div>`);
+            setTimeout(() => { $('#fakeAllow').onclick = () => {
+              browser(null);
+              workspaces.push(workspaces.length ? { name: 'Lumen Community', domain: 'lumen-community', user: 'Ivan', initial: 'LC', color: '#5c8a7e' } : { name: 'Lumen', domain: 'lumen', user: 'Ivan', initial: 'L', color: '#6a63b8' });
+              slackState = 'done'; render();
+            }; }, 0);
+          }
+        }, 1300);
+      };
+    }
+    if ($('#addAnother')) $('#addAnother').onclick = () => { slackState = 'idle'; render(); };
+    $('#back').onclick = () => { step = 0; render(); };
+    $('#next').onclick = () => { step = 2; render(); };
+  }
+  if (step === 2) {
+    c.className = 'content';
+    let body = '';
+    if (aiState === 'idle') body = `<button class="btn wide gpt" id="siwc">${OPENAI}Sign in with ChatGPT</button>
+        <div class="hint" style="text-align:center">Opens chatgpt.com in your browser. Works with ChatGPT Plus and Pro.</div>`;
+    if (aiState === 'waiting') body = `<div class="status">${SPIN}Finish signing in in your browser…</div>`;
+    if (aiState === 'done') body = `<div class="acct"><div class="av">${pxText('I', 2)}</div><div><div class="nm">ivan@lumen.dev</div><div class="sub">ChatGPT Plus · signed in</div></div><span class="ok" style="font-size:12px;color:var(--ok);display:flex;gap:6px;align-items:center">${spark('full')}Connected</span></div>
+        <div class="msg"><span class="mk">${spark('dim')}</span><span>Summaries use your <b>ChatGPT plan's usage</b>. Splark only summarises conversations that changed and waits for activity to settle, so it uses very little. You can cap Splark's weekly usage in ChatGPT's settings.</span></div>`;
+    c.innerHTML = `<h2>Connect ChatGPT</h2>
+      <p class="lead">Splark uses your <b>ChatGPT subscription</b> to summarise and rank unread messages. Messages go to OpenAI only for this, with storage turned off, and never touch any other server.</p>
+      ${body}
+      <div class="spacer"></div>
+      <div class="actions"><button class="btn secondary" id="back">Back</button><button class="btn" id="next" ${aiState === 'done' ? '' : 'disabled'}>Continue</button></div>`;
+    if ($('#siwc')) $('#siwc').onclick = () => {
+      aiState = 'waiting'; render();
+      browser(`<div class="url">auth.openai.com</div><b>Splark wants to use your ChatGPT plan</b><div style="color:#8a8a90;margin-top:4px">Summarise messages · signed in as ivan@lumen.dev</div><div class="row"><span></span><button id="fakeAllow">Allow</button></div>`);
+      setTimeout(() => { $('#fakeAllow').onclick = () => { browser(null); aiState = 'done'; render(); }; }, 0);
+    };
+    $('#back').onclick = () => { step = 1; render(); };
+    $('#next').onclick = () => { step = 3; render(); };
+  }
+  if (step === 3) {
+    c.className = 'content center';
+    c.innerHTML = `${appIcon(64)}
+      <h2>You're set</h2>
+      <p class="lead">Splark is in your menu bar now and is catching up on ${workspaces.length || 1} workspace${workspaces.length > 1 ? 's' : ''}.<br>Click the spark to see what needs you.</p>
+      <div class="toggles">
+        <div class="tg"><div>Open at login</div><span class="sw ${loginItem ? 'on' : ''}" id="sw1"></span></div>
+        <div class="tg"><div>Show count next to the spark<small>How many items need you</small></div><span class="sw ${showCount ? 'on' : ''}" id="sw2"></span></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="actions" style="width:100%"><span class="note">Change this any time in Settings.</span><button class="btn" id="finish">Done</button></div>`;
+    $('#sw1').onclick = () => { loginItem = !loginItem; render(); };
+    $('#sw2').onclick = () => { showCount = !showCount; render(); updateTray(); };
+    $('#finish').onclick = () => { $('.window').style.opacity = 0; $('.window').style.transition = 'opacity .3s'; };
+  }
+  updateTray();
+}
+function updateTray() {
+  const t = $('#tray');
+  if (step === 3) { t.innerHTML = `${spark('mid')}${showCount ? '<span>3</span>' : ''}`; t.classList.add('show'); $('#pointer').classList.add('show'); }
+  else { t.classList.remove('show'); $('#pointer').classList.remove('show'); }
+}
+document.querySelectorAll('#themeSeg button').forEach(b => b.addEventListener('click', () => {
+  document.body.classList.toggle('dark', b.dataset.t === 'dark');
+  document.querySelectorAll('#themeSeg button').forEach(x => x.classList.toggle('on', x === b));
+}));
+$('#restart').onclick = () => { step = 0; slackState = 'idle'; workspaces = []; aiState = 'idle'; browser(null); $('.window').style.opacity = 1; render(); };
+render();
+</script>
+</body>
+</html>

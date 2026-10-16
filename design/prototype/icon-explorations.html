@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Murmur — 1-bit status icons</title>
+<style>
+  :root { --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 22px 26px 40px; font-family: var(--font); background: #e9e9ee; color: #1d1d1f; -webkit-font-smoothing: antialiased; }
+  h1 { font-size: 20px; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { margin: 0 0 18px; font-size: 13px; color: #555; max-width: 980px; line-height: 1.45; }
+  .sets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .set { background: #fff; border-radius: 16px; padding: 16px 16px 14px; border: 2px solid transparent; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+  .set:hover { box-shadow: 0 4px 18px rgba(0,0,0,0.08); }
+  .set.selected { border-color: #0a84ff; }
+  .set h2 { font-size: 15px; margin: 0 0 2px; display: flex; gap: 8px; align-items: baseline; }
+  .set h2 .k { color: #0a84ff; font-weight: 750; }
+  .set .desc { font-size: 12.5px; color: #666; margin: 0 0 14px; line-height: 1.45; min-height: 54px; }
+
+  /* zoom tiles in the reference's style: white pixels on black, double-line frame */
+  .zoom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .zoom figure { margin: 0; text-align: center; }
+  .tile { background: #000; padding: 5px; border-radius: 3px; display: flex; justify-content: center; }
+  .tile .frame { border: 2px solid #fff; padding: 3px; }
+  .tile .frame2 { border: 1px solid #fff; padding: 7px; display: flex; justify-content: center; }
+  .zoom figcaption { font-size: 11px; color: #777; margin-top: 6px; line-height: 1.3; }
+  .zoom figcaption b { color: #333; font-weight: 600; display: block; }
+  .px { display: block; shape-rendering: crispEdges; }
+
+  .previews { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pv { border-radius: 12px; padding: 8px 6px; }
+  .pv.light { background: linear-gradient(160deg, #e9e3f7, #f6e6ef); }
+  .pv.dark { background: linear-gradient(160deg, #2a2440, #3a2a3a); }
+  .pv .panel { border-radius: 11px; padding: 4px 2px; }
+  .pv.light .panel { background: rgba(248,248,250,0.94); color: #1d1d1f; --t3: #a1a1a6; --t2: #6e6e73; }
+  .pv.dark .panel { background: rgba(44,44,48,0.94); color: #f5f5f7; --t3: #75757b; --t2: #a1a1a6; }
+  .r { display: grid; grid-template-columns: 15px minmax(0,1fr); column-gap: 9px; padding: 6px 7px; }
+  .r .ic { height: 15px; display: flex; align-items: center; color: inherit; }
+  .r .m { font-size: 10px; color: var(--t3); line-height: 15px; }
+  .r .s { font-size: 11px; line-height: 1.35; margin-top: 1px; }
+  .r .s b { font-weight: 640; }
+  .r.fyi .s { color: var(--t2); }
+  .menubar-sample { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11.5px; color: #666; flex-wrap: wrap; }
+  .mb { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: 6px; font: 600 12px var(--font); }
+  .mb.light { background: #e6e2f5; color: #1d1d1f; }
+  .mb.dark { background: #2d2840; color: #f5f5f7; }
+</style>
+</head>
+<body>
+<h1>1-bit status icons: dimmed → brighter → bright</h1>
+<p class="sub">Pure 1-bit pixel art like your reference: every pixel is fully on or off, and brightness comes from <b>dithering</b>. <b>Dimmed</b> (just comments) is drawn in a 50% checker pattern. <b>Brighter</b> (question for you) has a solid outline with a dithered fill. <b>Bright</b> (needs action) is fully solid. Icons are 15×15 pixels at one pixel per point, so they stay crisp on Retina. The framed black tiles are enlarged; the small panels show real size. Click a set to pick it.</p>
+
+<div class="sets" id="sets"></div>
+
+<script>
+// '#' = lit pixel. Treatment per level: dim = 50% checker; mid = solid edges + checker interior; full = solid.
+const SETS = [
+  {
+    key: 'A-glyphs', name: 'Glyphs', desc: 'Bold standalone symbols, like the "!" and "?" in your reference: a dithered "· · ·" for chatter, a "?" with a solid outline and shaded fill, and a solid wedge "!". Readable at a glance.',
+    icons: {
+      fyi: [
+        '...............', '...............', '...............', '...............', '...............', '...............',
+        '.###..###..###.', '.###..###..###.', '.###..###..###.',
+        '...............', '...............', '...............', '...............', '...............', '...............'],
+      question: [
+        '...............',
+        '....#######....',
+        '...#########...',
+        '...###...###...',
+        '.........###...',
+        '........####...',
+        '.......####....',
+        '......####.....',
+        '......###......',
+        '......###......',
+        '...............',
+        '......###......',
+        '......###......',
+        '...............',
+        '...............'],
+      urgent: [
+        '...............',
+        '.....#####.....',
+        '.....#####.....',
+        '.....#####.....',
+        '.....#####.....',
+        '......###......',
+        '......###......',
+        '......###......',
+        '.......#.......',
+        '...............',
+        '......###......',
+        '......###......',
+        '......###......',
+        '...............',
+        '...............']
+    },
+    tray: 'bubble'
+  },
+  {
+    key: 'B-bubble', name: 'Bubble', desc: 'One speech bubble that "lights up": a dithered outline with "…", then a solid outline with "?", then a solid bubble with "!" cut out. The bright one doubles as the menu-bar icon.',
+    icons: {
+      fyi: [
+        '...............',
+        '..###########..',
+        '.#...........#.',
+        '#.............#',
+        '#.............#',
+        '#.............#',
+        '#..##..##..##.#',
+        '#..##..##..##.#',
+        '#.............#',
+        '.#...........#.',
+        '..###..#######.',
+        '....#.#........',
+        '....##.........',
+        '....#..........',
+        '...............'],
+      question: [
+        '...............',
+        '..###########..',
+        '.#...........#.',
+        '#.....###.....#',
+        '#....#...#....#',
+        '#........#....#',
+        '#.......#.....#',
+        '#......#......#',
+        '#.............#',
+        '.#.....#.....#.',
+        '..###..#######.',
+        '....#.#........',
+        '....##.........',
+        '....#..........',
+        '...............'],
+      urgent: [
+        '...............',
+        '..###########..',
+        '.#############.',
+        '######...######',
+        '######...######',
+        '######...######',
+        '#######.#######',
+        '###############',
+        '######...######',
+        '.#############.',
+        '..############.',
+        '....###........',
+        '....##.........',
+        '....#..........',
+        '...............']
+    },
+    tray: 'bubble'
+  },
+  {
+    key: 'C-spark', name: 'Spark', desc: 'A literal brightness scale, like the sparkle in your reference: a small dithered star, a bigger star with a shaded core, and a full sparkle with diagonal rays. No symbols, pure intensity.',
+    icons: {
+      fyi: [
+        '...............', '...............', '...............', '...............',
+        '.......#.......',
+        '......###......',
+        '.....#####.....',
+        '....#######....',
+        '.....#####.....',
+        '......###......',
+        '.......#.......',
+        '...............', '...............', '...............', '...............'],
+      question: [
+        '...............', '...............',
+        '.......#.......',
+        '.......#.......',
+        '......###......',
+        '.....#####.....',
+        '...#########...',
+        '.#############.',
+        '...#########...',
+        '.....#####.....',
+        '......###......',
+        '.......#.......',
+        '.......#.......',
+        '...............', '...............'],
+      urgent: [
+        '.......#.......',
+        '.......#.......',
+        '.#.....#.....#.',
+        '..#...###...#..',
+        '...#..###..#...',
+        '.....#####.....',
+        '....#######....',
+        '###############',
+        '....#######....',
+        '.....#####.....',
+        '...#..###..#...',
+        '..#...###...#..',
+        '.#.....#.....#.',
+        '.......#.......',
+        '.......#.......']
+    },
+    tray: 'spark'
+  }
+];
+const TREAT = { fyi: 'dim', question: 'mid', urgent: 'full' };
+const LABEL = { fyi: ['dimmed', 'just comments'], question: ['brighter', 'question for you'], urgent: ['bright', 'needs action'] };
+
+function lit(grid, x, y) { return y >= 0 && y < grid.length && x >= 0 && x < grid[y].length && grid[y][x] === '#'; }
+function on(grid, x, y, treat) {
+  if (!lit(grid, x, y)) return false;
+  if (treat === 'full') return true;
+  const checker = (x + y) % 2 === 0;
+  if (treat === 'dim') return checker;
+  const edge = !lit(grid, x - 1, y) || !lit(grid, x + 1, y) || !lit(grid, x, y - 1) || !lit(grid, x, y + 1);
+  return edge || checker;
+}
+function pixelSVG(grid, scale, treat, color = 'currentColor') {
+  const h = grid.length, w = grid[0].length;
+  let r = '';
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (on(grid, x, y, treat)) r += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  return `<svg class="px" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w} ${h}" fill="${color}">${r}</svg>`;
+}
+const ROWS = [
+  { p: 'urgent', m: '4m · #incidents', s: '<b>Approve the rollback?</b> Checkout is failing for EU cards.' },
+  { p: 'question', m: '1h · Leo Park', s: '<b>Move tomorrow\'s 1:1 to Thursday?</b> Same time.' },
+  { p: 'fyi', m: '1h · #eng', s: '<b>CI is moving to the new runners,</b> trying it next sprint.' }
+];
+function preview(set, theme) {
+  return `<div class="pv ${theme}"><div class="panel">${ROWS.map(r => `<div class="r ${r.p}"><span class="ic">${pixelSVG(set.icons[r.p], 1, TREAT[r.p])}</span><div><div class="m">${r.m}</div><div class="s">${r.s}</div></div></div>`).join('')}</div></div>`;
+}
+function trayHTML(set) {
+  const fam = SETS.find(s => s.key === (set.tray === 'spark' ? 'C-spark' : 'B-bubble'));
+  const quiet = fam.icons[set.tray === 'spark' ? 'question' : 'question'];
+  const loud = fam.icons.urgent;
+  const quietGrid = set.tray === 'spark' ? fam.icons.question : SETS[1].icons.fyi.map((row, i) => i >= 6 && i <= 7 ? '#.............#' : row);
+  return `<div class="menubar-sample">Menu bar:
+    <span class="mb light">${pixelSVG(quietGrid, 1, 'full')}<span>3</span></span>
+    <span class="mb light">${pixelSVG(loud, 1, 'full')}<span>5</span></span>
+    <span class="mb dark">${pixelSVG(loud, 1, 'full')}<span>5</span></span>
+    <span style="color:#999">nothing urgent · urgent</span></div>`;
+}
+document.getElementById('sets').innerHTML = SETS.map((set, i) => `
+  <div class="set" data-choice="${set.key}" onclick="pick(this)">
+    <h2><span class="k">${'ABC'[i]}</span>${set.name}</h2>
+    <p class="desc">${set.desc}</p>
+    <div class="zoom">${['fyi', 'question', 'urgent'].map(p => `<figure><div class="tile"><div class="frame"><div class="frame2">${pixelSVG(set.icons[p], 4, TREAT[p], '#fff')}</div></div></div><figcaption><b>${LABEL[p][0]}</b>${LABEL[p][1]}</figcaption></figure>`).join('')}</div>
+    <div class="previews">${preview(set, 'light')}${preview(set, 'dark')}</div>
+    ${trayHTML(set)}
+  </div>`).join('');
+function pick(el) { document.querySelectorAll('.set').forEach(s => s.classList.toggle('selected', s === el)); }
+</script>
+</body>
+</html>
