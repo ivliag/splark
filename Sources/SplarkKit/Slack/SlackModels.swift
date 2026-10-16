@@ -1,0 +1,89 @@
+import Foundation
+
+public struct SlackAuthTest: Decodable, Sendable, Equatable {
+    public let userId: String
+    public let user: String?
+    public let teamId: String
+    public let team: String?
+    public let url: String?
+}
+
+public struct SlackConversation: Decodable, Sendable, Equatable {
+    public let id: String
+    public let name: String?
+    public let user: String?          // the other person, for IMs
+    public let isIm: Bool?
+    public let isMpim: Bool?
+    public let isPrivate: Bool?
+    public let isChannel: Bool?
+    public let isArchived: Bool?
+    public let lastRead: String?      // conversations.info only
+    public let unreadCountDisplay: Int?  // conversations.info, DMs only
+
+    public enum Kind: String, Sendable { case im, mpim, privateChannel, publicChannel }
+    public var kind: Kind {
+        if isIm == true { return .im }
+        if isMpim == true { return .mpim }
+        if isPrivate == true { return .privateChannel }
+        return .publicChannel
+    }
+}
+
+public struct SlackResponseMetadata: Decodable, Sendable, Equatable { public let nextCursor: String? }
+
+public struct SlackConversationList: Decodable, Sendable { public let channels: [SlackConversation]; public let responseMetadata: SlackResponseMetadata? }
+public struct SlackConversationInfo: Decodable, Sendable { public let channel: SlackConversation }
+
+public struct SlackMessage: Decodable, Sendable, Equatable {
+    public let ts: String
+    public let user: String?
+    public let botId: String?
+    public let username: String?
+    public let subtype: String?
+    public let text: String?
+    public let threadTs: String?
+    public let replyCount: Int?
+    public let latestReply: String?
+    public let replyUsers: [String]?
+}
+
+public struct SlackHistory: Decodable, Sendable {
+    public let messages: [SlackMessage]
+    public let hasMore: Bool?
+    public let responseMetadata: SlackResponseMetadata?
+}
+
+public struct SlackSearchResult: Decodable, Sendable {
+    public struct Matches: Decodable, Sendable { public let total: Int?; public let matches: [Match] }
+    public struct Match: Decodable, Sendable, Equatable {
+        public struct Channel: Decodable, Sendable, Equatable { public let id: String; public let name: String? }
+        public let channel: Channel
+        public let ts: String
+        public let user: String?
+        public let text: String?
+        public let permalink: String?
+    }
+    public let messages: Matches
+}
+
+public struct SlackManifestCreate: Decodable, Sendable {
+    public struct Credentials: Decodable, Sendable { public let clientId: String; public let clientSecret: String? }
+    public let appId: String
+    public let credentials: Credentials
+    public let oauthAuthorizeUrl: String?
+}
+
+public struct SlackOAuthAccess: Decodable, Sendable {
+    public struct AuthedUser: Decodable, Sendable {
+        public let id: String
+        public let scope: String?
+        public let accessToken: String?
+        public let tokenType: String?
+        public let refreshToken: String?
+        public let expiresIn: Int?
+    }
+    public struct Team: Decodable, Sendable { public let id: String; public let name: String? }
+    public let appId: String?
+    public let authedUser: AuthedUser
+    public let team: Team?
+}
