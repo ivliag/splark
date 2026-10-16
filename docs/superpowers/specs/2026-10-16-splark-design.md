@@ -230,7 +230,11 @@ The user's app is created with `apps.manifest.create`, using the pasted app conf
 
 - **Port:** chosen at creation from a fixed range (for example 53682–53691; the first free one wins), and stored with the workspace so later re-authorisation uses the same redirect.
 - **Authorisation:** `apps.manifest.create` returns `client_id` and `oauth_authorize_url`. Splark opens the authorize URL with `user_scope`, `redirect_uri`, `state`, `code_challenge` and `code_challenge_method=S256`. It then exchanges the code at `oauth.v2.access` with `code_verifier` and no client secret.
-- **What gets stored:** the resulting `xoxp-` user token and the team ID/name, both in Keychain. The returned `client_secret` is not needed and is not stored.
+- **What gets stored:** everything goes in the Keychain:
+  - the user token, the team ID and name;
+  - the token's refresh token and expiry, and the app's `client_id`.
+
+  Slack issues **rotating** user tokens to PKCE apps, even with `token_rotation_enabled: false` (measured 2026-10-16, see `docs/spikes.md`). The token starts `xoxe.xoxp-` and expires after 12 hours. Splark refreshes it before expiry with `oauth.v2.access grant_type=refresh_token`. Whether that works without the client secret is verified at the start of Plan 2. If it doesn't, Splark also stores the user's own app `client_secret`, which `apps.manifest.create` returns. When the refresh token itself has expired, the user re-authorises the same app (Allow only, no new setup token).
 - **Why these scopes:** history and read scopes find unread messages. `users:read` gives names. `search:read` powers the mention sweep. `chat:write` and `reactions:write` are for replies and reactions. The `*:write` conversation scopes exist only for `conversations.mark` (mark as read). They also permit channel management, and the README says so plainly. Splark never calls those methods.
 - **Manual fallback:** a "create from manifest" link, `https://api.slack.com/apps?new_app=1&manifest_json=<urlencoded>`, using the same manifest without the redirect or PKCE fields. The user clicks *Install to Workspace* and pastes the *User OAuth Token*.
 
@@ -306,7 +310,7 @@ This follows OpenAI's open-source flow (developers.openai.com/siwc, "token shari
   - `response_type=code`
   - `client_id=dynamic_agent_client` on first sign-in; afterwards, the issued `oaiapp_…` ID
   - `agent_name_hint=Splark`
-  - `ext_agent_host_id=<persistent random UUID>`
+  - `ext_agent_host_id=urn:uuid:<persistent lowercase UUID>` (the bare UUID form is rejected)
   - `scope=openid profile email offline_access resource.invoke chatgpt.tokens.use.direct`
   - `resource=https://api.openai.com/v1`
   - `redirect_uri=http://127.0.0.1:<port>/callback` (127.0.0.1, not localhost; path exactly `/callback`)
@@ -319,7 +323,10 @@ This follows OpenAI's open-source flow (developers.openai.com/siwc, "token shari
 - **Endpoint:** `POST https://api.openai.com/v1/responses` with `stream: true` and `store: false`.
 - **Prompt placement:** the system prompt goes in `instructions` (system-role messages are rejected). No `temperature` and no `max_output_tokens` (unsupported with plan tokens).
 - **Output format:** `text.format` with a JSON schema. If the API rejects it, Splark falls back to "reply with JSON only" plus strict parsing.
-- **Model:** chosen from `GET /v1/models`. The default is the first available from a preference list of small, fast models, kept in one constant. Users can change it in Settings.
+- **Input:** a list with one user message, `[{"type":"message","role":"user","content":[{"type":"input_text","text":…}]}]`. Plan tokens reject a bare string with "Input must be a list".
+- **Model:** chosen from `GET /v1/models`.
+  - With a plan token, the response is `{"models":[{"slug","visibility","supported_in_api",…}]}`, not `{"data":[{"id"}]}`. Hidden (`visibility: hide`) and non-API models are skipped.
+  - The default is the first available of `gpt-6-luna`, then `gpt-5.6-luna`, then the first listed model, kept in one constant. Users can change it in Settings.
 
 ### 7.3 Triage
 
@@ -412,9 +419,9 @@ splark/
 
 Each is verified at the start of implementation, before the code that depends on it.
 
-1. **Slack app creation and PKCE:** `apps.manifest.create` with `pkce_enabled` and a `http://localhost:<port>` redirect; authorise and exchange without a client secret; the resulting `xoxp` token doesn't rotate. *Fallback if this fails:* the manual-token path.
+1. **Slack app creation and PKCE:** `apps.manifest.create` with `pkce_enabled` and a `http://localhost:<port>` redirect; authorise and exchange without a client secret. *Fallback if this fails:* the manual-token path. **Result:** works, but tokens rotate every 12 hours (see §6.1 and `docs/spikes.md`).
 2. **The badge:** `lsappinfo` returns Slack's badge label from an unsandboxed app on macOS 14–26, including when macOS badges for Slack are turned off. *If not:* schedule-only polling (already supported).
-3. **Sign in with ChatGPT** from a native app: dynamic registration, `GET /v1/models` contents, and `text.format` JSON schema support with plan tokens. *If the schema is unsupported:* JSON-only prompting.
+3. **Sign in with ChatGPT** from a native app: dynamic registration, `GET /v1/models` contents, and `text.format` JSON schema support with plan tokens. *If the schema is unsupported:* JSON-only prompting. **Result:** works with a `urn:uuid` host ID, a list-shaped `input` and the plan-token models shape (see §7). json_schema output works.
 4. **Mention sweep:** `search.messages` with `<@Uxxxx>` returns mentions. *If not:* search for the user's display name, or drop the sweep and rely on history.
 5. **Internal-app rate limits:** confirm that the user's private app gets Tier 3 limits, not the 1-request-per-minute limit that applies to distributed apps.
 

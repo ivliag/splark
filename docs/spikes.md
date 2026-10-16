@@ -7,8 +7,9 @@ What the spec's §13 risks turned out to be, measured on real accounts. Plans 2 
 - macOS version: 26.5.1
 - Unread channel activity, no mentions: `lsappinfo info -only StatusLabel -app com.tinyspeck.slackmacgap` returned `"label"="•"` → parses as `dot` (observed 2026-10-16 09:5x)
 - Everything read: `splark-dev badge` → `none` (2026-10-16 10:19)
+- (After the final review, `SlackBadge.none` was renamed `.clear`; the readings below are as printed at the time.)
 - DM or mention arrives: `10:46:52  count(1)`. Read it: `10:47:13  none`. Both picked up within the 2 s poll.
-- macOS "Badge application icon" off: not exercised during the watch window (unknown).
+- macOS "Badge application icon" off: **not yet run**. If it makes `lsappinfo` report an empty label rather than nothing, Splark would read "clear" while unread messages exist. Run this before writing Plan 2.
 - Slack quit: not exercised against the real app. A unit test covers that `current()` is nil when Slack isn't running.
 - **Decision:** the badge signal works for none / dot / count on macOS 26.5.1 and is used as a trigger. How it behaves with macOS badges off is unknown, so Plan 2 keeps it optional, as the spec says: schedule-only polling when it's unavailable, and Settings shows whether it's available.
 
@@ -45,7 +46,7 @@ Run 2026-10-16 with a personal ChatGPT account.
   - It worked once `ext_agent_host_id` was a lowercase `urn:uuid:…`.
   - A bare uppercase UUID was rejected: `{"error":{"message":"Invalid authorize request","param":"ext_agent_host_id","code":"invalid_authorize_request"}}`.
 - **Callback query keys:** `client_id`, `code`, `scope`, `state`. The issued `client_id` (`oaiapp_…`) arrives in the callback.
-- **Granted scopes** include `chatgpt.tokens.use.direct`.
+- **Granted scopes** include `chatgpt.tokens.use.direct`. The plan level (Plus or Pro) isn't reported in the callback or token response.
 - **Tokens:** the access token lasts 1 hour, and a refresh token is returned.
 - **`GET /v1/models`** with a plan token returns `{"models":[{"slug","visibility","supported_in_api",…}]}`, not `{"data":[{"id"}]}`.
   - Listed: `gpt-6-luna` ("Fast and affordable model for easier tasks"), `gpt-5.6-luna` and `gpt-5.6-terra`.
@@ -55,3 +56,7 @@ Run 2026-10-16 with a personal ChatGPT account.
   - With a `json_schema`, gpt-6-luna answered in 2.5 s: `{"lead":"Approve the rollback now; checkout is failing for EU cards.","level":"action"}`.
   - Without a schema it took 3.4 s and returned valid JSON, but with keys of its own choosing.
 - **Decision:** Plan 2 uses `text.format` json_schema. Its default triage model is the first available of `gpt-6-luna`, then `gpt-5.6-luna`, then the first listed model. Credentials refresh before the 1-hour expiry.
+
+## Menu-bar shell (Plan 1, Task 3)
+
+- The human confirmed with a screenshot (2026-10-16 10:30): the bright pixel spark with "5" shows in the menu bar.
