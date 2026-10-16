@@ -7,10 +7,10 @@ What the spec's §13 risks turned out to be, measured on real accounts. Plans 2 
 - macOS version: 26.5.1
 - Unread channel activity, no mentions: `lsappinfo info -only StatusLabel -app com.tinyspeck.slackmacgap` returned `"label"="•"` → parses as `dot` (observed 2026-10-16 09:5x)
 - Everything read: `splark-dev badge` → `none` (2026-10-16 10:19)
-- DM or mention arrives: pending (human checkpoint)
-- macOS "Badge application icon" off: pending (human checkpoint)
-- Slack quit: pending (human checkpoint)
-- **Decision:** pending the three checks above
+- DM or mention arrives: `10:46:52  count(1)`. Read it: `10:47:13  none`. Both picked up within the 2 s poll.
+- macOS "Badge application icon" off: not exercised during the watch window (unknown).
+- Slack quit: not exercised against the real app. A unit test covers that `current()` is nil when Slack isn't running.
+- **Decision:** the badge signal works for none / dot / count on macOS 26.5.1 and is used as a trigger. How it behaves with macOS badges off is unknown, so Plan 2 keeps it optional, as the spec says: schedule-only polling when it's unavailable, and Settings shows whether it's available.
 
 ## 1. Private Slack app with PKCE
 
