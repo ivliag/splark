@@ -5,14 +5,15 @@ public enum SlackError: Error, Equatable, Sendable {
     case rateLimited(retryAfter: TimeInterval)
     case http(Int)
     case decoding(String)
+    case refreshFailed(String)               // the refresh token was refused: the user must re-authorise
 }
 
 private struct SlackEnvelope: Decodable { let ok: Bool; let error: String? }
 
 /// Typed access to the Slack Web API: form-encoded POSTs, Bearer token, per-method rate limiting,
-/// `Retry-After` handling (two retries), and `ok: false` mapped to `SlackError.api`.
+/// `Retry-After` handling (two retries), one token refresh on `token_expired`, and `ok: false` mapped to `SlackError.api`.
 public struct SlackClient: Sendable {
-    public let token: String?
+    private let tokens: SlackTokenSource?
     private let transport: HTTPTransport
     private let limiter: RateLimiter
     private let sleeper: Sleeper
@@ -20,7 +21,12 @@ public struct SlackClient: Sendable {
 
     public init(token: String?, transport: HTTPTransport = URLSessionTransport(), limiter: RateLimiter = RateLimiter(),
                 sleeper: Sleeper = TaskSleeper(), baseURL: URL = URL(string: "https://slack.com/api/")!) {
-        self.token = token
+        self.init(tokens: token.map { FixedToken(token: $0) }, transport: transport, limiter: limiter, sleeper: sleeper, baseURL: baseURL)
+    }
+
+    public init(tokens: SlackTokenSource?, transport: HTTPTransport = URLSessionTransport(), limiter: RateLimiter = RateLimiter(),
+                sleeper: Sleeper = TaskSleeper(), baseURL: URL = URL(string: "https://slack.com/api/")!) {
+        self.tokens = tokens
         self.transport = transport
         self.limiter = limiter
         self.sleeper = sleeper
@@ -36,7 +42,9 @@ public struct SlackClient: Sendable {
     public func call<Response: Decodable & Sendable>(_ method: String, tier: SlackTier, params: [String: String] = [:],
                                                     bearer: String? = nil, as: Response.Type = Response.self) async throws -> Response {
         let url = baseURL.appendingPathComponent(method)
+        var token = bearer == nil ? try await tokens?.accessToken() : nil
         var attempt = 0
+        var refreshed = false
         while true {
             try await sleeper.sleep(seconds: await limiter.reserve(method, tier: tier))
             let (data, response) = try await transport.send(.form(url, params, bearer: bearer ?? token))
@@ -51,6 +59,11 @@ public struct SlackClient: Sendable {
             let envelope: SlackEnvelope
             do { envelope = try Self.decoder.decode(SlackEnvelope.self, from: data) }
             catch { throw SlackError.decoding("\(method): \(error)") }
+            if !envelope.ok, envelope.error == "token_expired", !refreshed, let tokens, let rejected = token {
+                token = try await tokens.refreshAfterRejection(of: rejected)
+                refreshed = true
+                continue
+            }
             guard envelope.ok else { throw SlackError.api(envelope.error ?? "unknown_error") }
             do { return try Self.decoder.decode(Response.self, from: data) }
             catch { throw SlackError.decoding("\(method): \(error)") }
