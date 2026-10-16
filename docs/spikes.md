@@ -70,3 +70,17 @@ Run 2026-10-16 with a personal ChatGPT account.
 ## Menu-bar shell (Plan 1, Task 3)
 
 - The human confirmed with a screenshot (2026-10-16 10:30): the bright pixel spark with "5" shows in the menu bar.
+
+## 6. The engine, live (Plan 2)
+
+Run 2026-10-16 at 16:11, against the Twain workspace and a personal ChatGPT account, from the `plan-2-engine-build` branch.
+
+- `splark-dev slack-refresh`: it converted the pre-Plan-2 Keychain items to `SlackCredentials`, then refreshed. The new token passed `auth.test`, expiring 12 hours later.
+- `splark-dev inbox --no-text --minutes 5` on Twain:
+  - **Catch-up:** all 210 conversations were checked in 4 min 10 s. The first ~50 went in 30 s, then the run held to Slack's Tier 3 pace of about 50 `conversations.info` calls a minute.
+  - **Items:** 10 unread, and ChatGPT summarised all 10.
+  - **Before summaries:** the heuristic showed 3 as "need you" (direct messages and threads). ChatGPT then judged all 3 just comments, so the run ended at "Nothing needs you".
+  - **Problems:** no sync problem was shown, and the badge watcher ran throughout.
+- `from:<@me>` search: no error reached the sync status. It is best effort and reports nothing, so its results weren't observed separately.
+- `splark-dev triage-eval` with gpt-6-luna: **22 of 22** right in 33 s, including the prompt-injection case. The spec's bar is 80%.
+- **Decision:** none for Plan 3. Expect about 4 minutes for a first catch-up on a workspace of this size; the panel header's "Catching up… N of M" covers it.
