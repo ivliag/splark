@@ -101,7 +101,7 @@ Success means:
 - **Colour:** the image is drawn as a template image, so macOS tints it correctly in light and dark menu bars.
 - **Clicks:**
   - Left-click toggles the panel.
-  - Right-click (or ⌥-click) opens a small menu: Refresh now, Settings…, Pause summaries, Quit.
+  - Right-click (or ⌥-click, or ⌃-click for trackpads without a right click) opens a small menu: Refresh now, Settings…, Pause summaries, Quit.
 
 ### 4.3 Panel
 
@@ -131,6 +131,8 @@ The layout is the prototype's activity-log style.
   - Reactions show in the meta line.
 - **Dismissal:** the panel closes on click outside, Esc (when no row is expanded), or after Open in Slack.
 - **Size:** width 372 pt; height grows with content up to 70% of the screen, then scrolls.
+- **Screen:** the one the clicked spark is on; with separate Spaces per display, each display has its own menu bar.
+- **Keyboard:** the panel takes the keyboard when it opens, so Esc and the reply field work at once. It doesn't activate Splark, so the app you were in stays frontmost.
 - **Empty state:** a dimmed spark and "Nothing unread in Slack."
 
 ### 4.4 Setup (first run)
@@ -152,11 +154,12 @@ A single window with four steps, shown as four sparks in the title bar (bright =
 
 ### 4.5 Settings
 
-One small window with four sections.
+One small window with four sections, as tabs in its title bar, in setup's look.
 
 - **Workspaces:**
-  - A list with status (Connected / Waiting for approval / Token revoked), whether the badge signal is available, and the last sync time.
-  - Add, Finish connecting, and Remove (which deletes the token from Keychain and tells the user how to delete the private Slack app).
+  - A list with status (Connected / Waiting for approval / Token revoked) and the last sync time. One line below the list says whether Slack's Dock badge can be read: it belongs to the Slack app, not to a workspace.
+  - Add (setup's Slack step on its own), Finish connecting, Reconnect, and Remove (which deletes the token from Keychain and tells the user how to delete the private Slack app). Remove and Reset ask first, inline.
+  - A workspace connected with a pasted token has no app to Allow again: when its token stops working, it offers "Paste new token" instead of Reconnect.
   - Per-workspace excluded channels (a picker).
 - **ChatGPT:** the account and plan, a model picker (from `GET /v1/models`, with a recommended default), Sign out, and Pause summaries.
 - **General:** Open at login, Show count, and Reset Splark (clears all data).
@@ -187,7 +190,7 @@ One small window with four sections.
 | `Triage` | Debounces changed snapshots, batches them, builds the prompt, validates and caches results, runs the heuristic fallback | LLMClient, Clock |
 | `InboxStore` | Merges triage results across workspaces into the sorted list; applies excluded channels and optimistic action states | Triage, SyncEngine |
 | `Actions` | Reply, react, mark read, mark all read, open in Slack; optimistic updates with rollback on failure | SlackClient, InboxStore |
-| UI: `StatusItemController`, `PanelController` + `PanelView`, `SetupWindow`, `SettingsWindow` | AppKit status item and panel (`NSPanel`, non-activating; it becomes key only when the reply field is focused); SwiftUI views | InboxStore, Actions, PixelArt |
+| UI: `StatusItemController`, `PanelController` + `PanelView`, `SetupWindow`, `SettingsWindow` | AppKit status item and panel (`NSPanel`, non-activating; it becomes key when shown, for Esc and the reply field); SwiftUI views | InboxStore, Actions, PixelArt |
 
 All time-dependent units take an injectable `Clock`, and every network-facing unit sits behind a protocol so it can be faked in tests.
 
@@ -430,7 +433,7 @@ splark/
 ## 12. Distribution
 
 - **Licence:** MIT.
-- **Builds:** an ad-hoc-signed `.app` zip on GitHub Releases until a Developer ID is available. The README explains the right-click → Open step. A notarised DMG and a Homebrew cask follow once signing is set up.
+- **Builds:** an ad-hoc-signed `.app` zip on GitHub Releases until a Developer ID is available. The README explains the first launch: right-click → Open on macOS 14, and Open Anyway in System Settings → Privacy & Security on macOS 15 and later (where Apple removed the right-click bypass). A `v*` tag drafts the release; it is published after the manual QA in `docs/qa.md`. A notarised DMG and a Homebrew cask follow once signing is set up.
 - **App icon:** `make-icon.sh` renders it from `PixelArt` at every required size, so it matches the in-app spark exactly.
 
 ## 13. Risks and early spikes
