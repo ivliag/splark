@@ -61,8 +61,10 @@ func slackProbeCommand() async throws {
     let sample = Array(all.filter { $0.kind == .im }.prefix(5)) + Array(all.filter { $0.kind != .im }.prefix(5))
     for conversation in sample {
         let info = try await slack.conversationsInfo(conversation.id)
-        let unread = try await slack.conversationsHistory(conversation.id, oldest: info.lastRead, limit: 40).messages.count
-        print("  \(conversation.kind) \(info.name ?? conversation.id): last_read=\(info.lastRead ?? "nil") unread_count_display=\(info.unreadCountDisplay.map(String.init) ?? "nil") unread_fetched=\(unread)")
+        let unread: String
+        do { unread = String(try await slack.conversationsHistory(conversation.id, oldest: info.lastRead, limit: 40).messages.count) }
+        catch { unread = "error \(error)" }
+        print("  \(conversation.kind) \(info.name ?? conversation.id): last_read=\(info.lastRead.map { "\"\($0)\"" } ?? "nil") unread_count_display=\(info.unreadCountDisplay.map(String.init) ?? "nil") unread_fetched=\(unread)")
     }
 
     if let busy = all.first(where: { $0.kind == .publicChannel }) {
