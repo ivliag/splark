@@ -20,7 +20,7 @@ do {
     case "badge": await badgeCommand()
     case "slack-connect": try await slackConnectCommand()
     case "slack-probe": try await slackProbeCommand()
-    case "slack-manifest-url": print(SlackAppManifest.createFromManifestURL())
+    case "slack-manifest-url": print(try SlackAppManifest.createFromManifestURL())
     case "slack-reauth": try await slackReauthCommand()
     case "slack-refresh": try await slackRefreshCommand()
     case "chatgpt-login": try await chatgptLoginCommand()

@@ -115,3 +115,12 @@ import Testing
         #expect(await limiter.reserve("conversations.history", tier: .tier3) == 30)
     }
 }
+
+@Suite struct SlackFormEncodingTests {
+    @Test func formRequestsCarryNoCharset() async throws {
+        // Slack answers "superfluous_charset" to "application/x-www-form-urlencoded; charset=utf-8".
+        let stub = StubTransport(json: #"{"ok":true,"user_id":"U1","team_id":"T1"}"#)
+        _ = try await SlackClient(token: "x", transport: stub, sleeper: RecordingSleeper()).authTest()
+        #expect(stub.requests[0].value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded")
+    }
+}

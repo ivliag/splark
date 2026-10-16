@@ -101,3 +101,22 @@ public struct SlackTokenRefresh: Decodable, Sendable {
     public var userRefreshToken: String? { authedUser?.refreshToken ?? refreshToken }
     public var userExpiresIn: Int? { authedUser?.expiresIn ?? expiresIn }
 }
+
+extension SlackOAuthAccess.AuthedUser: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String {
+        "AuthedUser(id: \(id), accessToken: \(Redact.token(accessToken)), refreshToken: \(Redact.token(refreshToken)), expiresIn: \(expiresIn.map(String.init) ?? "nil"))"
+    }
+    public var debugDescription: String { description }
+}
+
+extension SlackOAuthAccess: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String { "SlackOAuthAccess(team: \(team?.id ?? "nil"), authedUser: \(authedUser))" }
+    public var debugDescription: String { description }
+}
+
+extension SlackTokenRefresh: CustomStringConvertible, CustomDebugStringConvertible {
+    public var description: String {
+        "SlackTokenRefresh(accessToken: \(Redact.token(userAccessToken)), refreshToken: \(Redact.token(userRefreshToken)), expiresIn: \(userExpiresIn.map(String.init) ?? "nil"))"
+    }
+    public var debugDescription: String { description }
+}

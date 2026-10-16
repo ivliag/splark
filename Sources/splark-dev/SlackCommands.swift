@@ -21,7 +21,7 @@ func slackConnectCommand() async throws {
     guard let server else { fail("no free port in \(SlackAppManifest.redirectPorts)") }
     let slack = SlackClient(token: nil)
     print("1/3 Creating your private Slack app (redirect port \(port))…")
-    let created = try await slack.appsManifestCreate(configToken: configToken, manifestJSON: SlackAppManifest.json(redirectPort: port))
+    let created = try await slack.appsManifestCreate(configToken: configToken, manifestJSON: try SlackAppManifest.json(redirectPort: port))
     print("    app \(created.appId), client \(created.credentials.clientId)")
     let pkce = PKCE.random(), state = PKCE.randomURLSafeString(byteCount: 16)
     let authorize = SlackAppManifest.authorizeURL(clientId: created.credentials.clientId, redirectPort: port, state: state, pkce: pkce)

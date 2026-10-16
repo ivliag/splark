@@ -1,4 +1,5 @@
 import AppKit
+import SplarkKit
 import Foundation
 
 // Shared helpers for splark-dev commands.
@@ -13,7 +14,7 @@ func option(_ name: String) -> String? {
     return args[i + 1]
 }
 
-func mask(_ token: String) -> String { token.count > 12 ? "\(token.prefix(9))…\(token.suffix(4))" : "…" }
+func mask(_ token: String) -> String { Redact.token(token) }
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data("error: \(message)\n".utf8))

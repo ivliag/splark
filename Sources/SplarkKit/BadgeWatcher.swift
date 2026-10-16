@@ -21,8 +21,13 @@ public protocol CommandRunner: Sendable {
     func run(_ executable: String, _ arguments: [String]) throws -> String
 }
 
+public enum ProcessRunnerError: Error, Equatable { case timedOut(String) }
+
 public struct ProcessRunner: CommandRunner {
-    public init() {}
+    public let timeout: TimeInterval
+    public init(timeout: TimeInterval = 5) { self.timeout = timeout }
+
+    /// Returns the tool's standard output. A tool still running after `timeout` is killed and `.timedOut` is thrown.
     public func run(_ executable: String, _ arguments: [String]) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -30,10 +35,23 @@ public struct ProcessRunner: CommandRunner {
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
+        // Read on another thread, so a chatty tool can't fill the pipe and stall.
+        let output = LockedBox(Data())
+        let readDone = DispatchSemaphore(value: 0)
+        let reader = pipe.fileHandleForReading
         try process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return String(decoding: data, as: UTF8.self)
+        DispatchQueue.global().async {
+            output.value = reader.readDataToEndOfFile()
+            readDone.signal()
+        }
+        if exited.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            throw ProcessRunnerError.timedOut(executable)
+        }
+        readDone.wait()
+        return String(decoding: output.value, as: UTF8.self)
     }
 }
 
@@ -43,7 +61,7 @@ public final class BadgeWatcher: @unchecked Sendable {
     private let runner: CommandRunner
     private let isSlackRunning: @Sendable () -> Bool
     private let interval: Duration
-    private var task: Task<Void, Never>?
+    private let task = LockedBox<Task<Void, Never>?>(nil)
 
     public init(runner: CommandRunner = ProcessRunner(),
                 interval: Duration = .seconds(2),
@@ -65,8 +83,7 @@ public final class BadgeWatcher: @unchecked Sendable {
 
     /// Calls `onChange` with the first reading and then on every change, until `stop()`.
     public func start(onChange: @escaping @Sendable (SlackBadge?) -> Void) {
-        stop()
-        task = Task { [weak self] in
+        let poller = Task { [weak self] in
             var last: SlackBadge?? = .none
             while !Task.isCancelled, let self {
                 let now = self.current()
@@ -74,7 +91,10 @@ public final class BadgeWatcher: @unchecked Sendable {
                 try? await Task.sleep(for: self.interval)
             }
         }
+        task.exchange(poller)?.cancel()
     }
 
-    public func stop() { task?.cancel(); task = nil }
+    public func stop() { task.exchange(nil)?.cancel() }
+
+    public var isRunning: Bool { task.value != nil }
 }

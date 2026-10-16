@@ -36,21 +36,34 @@ public struct ResponseStreamParser: Sendable {
     }
 }
 
-public enum OpenAIError: Error, Equatable { case http(Int, String), stream(String), incomplete }
+public enum OpenAIError: Error, Equatable { case http(Int, String), stream(String), incomplete, invalidRequest(String) }
 
 /// Minimal client for the endpoints Splark uses with ChatGPT-plan tokens (spec §7.2).
 public struct OpenAIClient: Sendable {
     public static let baseURL = URL(string: "https://api.openai.com/v1/")!
+    public typealias ByteStream = AsyncThrowingStream<UInt8, Error>
+    public typealias Streamer = @Sendable (URLRequest) async throws -> (ByteStream, HTTPURLResponse)
     private let transport: HTTPTransport
-    private let streamer: @Sendable (URLRequest) async throws -> (URLSession.AsyncBytes, HTTPURLResponse)
+    private let streamer: Streamer
 
-    public init(transport: HTTPTransport = URLSessionTransport(),
-                streamer: @escaping @Sendable (URLRequest) async throws -> (URLSession.AsyncBytes, HTTPURLResponse) = { request in
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                    return (bytes, response as! HTTPURLResponse)
-                }) {
+    public init(transport: HTTPTransport = URLSessionTransport(), streamer: @escaping Streamer = OpenAIClient.urlSessionStreamer) {
         self.transport = transport
         self.streamer = streamer
+    }
+
+    public static let urlSessionStreamer: Streamer = { request in
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        let stream = ByteStream { continuation in
+            let pump = Task {
+                do {
+                    for try await byte in bytes { continuation.yield(byte) }
+                    continuation.finish()
+                } catch { continuation.finish(throwing: error) }
+            }
+            continuation.onTermination = { _ in pump.cancel() }
+        }
+        return (stream, http)
     }
 
     public func listModels(accessToken: String) async throws -> [String] {
@@ -73,14 +86,15 @@ public struct OpenAIClient: Sendable {
     }
 
     /// The request body: always `stream: true`, `store: false`, instructions (never a system message).
-    public static func responsesBody(model: String, instructions: String, input: String, schemaName: String?, schema: [String: Any]?) -> Data {
+    public static func responsesBody(model: String, instructions: String, input: String, schemaName: String?, schema: [String: Any]?) throws -> Data {
         // Plan tokens reject a bare string ("Input must be a list"): send one user message.
         let message: [String: Any] = ["type": "message", "role": "user", "content": [["type": "input_text", "text": input]]]
         var body: [String: Any] = ["model": model, "instructions": instructions, "input": [message], "stream": true, "store": false]
         if let schemaName, let schema {
             body["text"] = ["format": ["type": "json_schema", "name": schemaName, "schema": schema, "strict": true]]
         }
-        return try! JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        guard JSONSerialization.isValidJSONObject(body) else { throw OpenAIError.invalidRequest("the schema is not valid JSON") }
+        return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
     }
 
     public func respond(accessToken: String, model: String, instructions: String, input: String,
@@ -90,13 +104,25 @@ public struct OpenAIClient: Sendable {
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.httpBody = Self.responsesBody(model: model, instructions: instructions, input: input, schemaName: schemaName, schema: schema)
+        request.httpBody = try Self.responsesBody(model: model, instructions: instructions, input: input, schemaName: schemaName, schema: schema)
         let (bytes, response) = try await streamer(request)
         var parser = ResponseStreamParser()
         var raw = ""
-        for try await line in bytes.lines {
-            raw += line + "\n"
-            parser.feed(line + "\n")
+        var line: [UInt8] = []
+        // Split on "\n" only: AsyncBytes.lines also splits on U+2028/U+2029, which may sit inside a JSON string.
+        for try await byte in bytes {
+            line.append(byte)
+            if byte == 0x0A {
+                let text = String(decoding: line, as: UTF8.self)
+                raw += text
+                parser.feed(text)
+                line.removeAll(keepingCapacity: true)
+            }
+        }
+        if !line.isEmpty {
+            let text = String(decoding: line, as: UTF8.self) + "\n"
+            raw += text
+            parser.feed(text)
         }
         guard response.statusCode == 200 else { throw OpenAIError.http(response.statusCode, String(raw.prefix(2000))) }
         if let failure = parser.failure { throw OpenAIError.stream(failure) }

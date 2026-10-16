@@ -16,7 +16,8 @@ public struct PKCE: Sendable, Equatable {
 
     public static func randomURLSafeString(byteCount: Int) -> String {
         var bytes = [UInt8](repeating: 0, count: byteCount)
-        _ = SecRandomCopyBytes(kSecRandomDefault, byteCount, &bytes)
+        let status = SecRandomCopyBytes(kSecRandomDefault, byteCount, &bytes)
+        precondition(status == errSecSuccess, "SecRandomCopyBytes failed (\(status))")
         return base64URL(Data(bytes))
     }
 

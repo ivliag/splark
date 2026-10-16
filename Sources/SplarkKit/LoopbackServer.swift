@@ -164,4 +164,12 @@ final class LockedBox<Value>: @unchecked Sendable {
         get { lock.withLock { _value } }
         set { lock.withLock { _value = newValue } }
     }
+    /// Reads and changes the value under the lock.
+    func withLock<Result>(_ body: (inout Value) throws -> Result) rethrows -> Result {
+        try lock.withLock { try body(&_value) }
+    }
+    /// Stores `newValue` and returns the previous value, atomically.
+    @discardableResult func exchange(_ newValue: Value) -> Value {
+        lock.withLock { let old = _value; _value = newValue; return old }
+    }
 }
