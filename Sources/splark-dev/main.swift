@@ -14,6 +14,7 @@ usage: splark-dev <command>
   slack-manifest-url                  print the manual "create from manifest" link (fallback)
   chatgpt-login                       Sign in with ChatGPT
   chatgpt-probe [--model M]           list models and send a tiny structured request
+  inbox [--minutes N] [--no-text]     run the whole engine against your Slack and ChatGPT, printing the inbox
 """
 
 do {
@@ -26,6 +27,7 @@ do {
     case "slack-refresh": try await slackRefreshCommand()
     case "chatgpt-login": try await chatgptLoginCommand()
     case "chatgpt-probe": try await chatgptProbeCommand()
+    case "inbox": try await inboxCommand()
     default: print(usage)
     }
 } catch {
