@@ -13,7 +13,7 @@ usage: splark-dev <command>
   slack-probe [--team T]              run the Slack spike checks against the connected workspace
   slack-manifest-url                  print the manual "create from manifest" link (fallback)
   chatgpt-login                       Sign in with ChatGPT
-  chatgpt-probe [--model M]           list models and send a tiny structured request (--raw-models dumps /v1/models)
+  chatgpt-probe [--model M]           list models and send a tiny structured request
 """
 
 do {

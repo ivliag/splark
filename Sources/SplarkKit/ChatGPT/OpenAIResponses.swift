@@ -36,7 +36,7 @@ public struct ResponseStreamParser: Sendable {
     }
 }
 
-public enum OpenAIError: Error, Equatable { case http(Int, String), stream(String), incomplete, invalidRequest(String) }
+public enum OpenAIError: Error, Equatable { case http(Int, String), rateLimited(retryAfter: TimeInterval?, body: String), stream(String), incomplete, invalidRequest(String) }
 
 /// Minimal client for the endpoints Splark uses with ChatGPT-plan tokens (spec §7.2).
 public struct OpenAIClient: Sendable {
@@ -123,6 +123,9 @@ public struct OpenAIClient: Sendable {
             let text = String(decoding: line, as: UTF8.self) + "\n"
             raw += text
             parser.feed(text)
+        }
+        if response.statusCode == 429 {
+            throw OpenAIError.rateLimited(retryAfter: response.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init), body: String(raw.prefix(2000)))
         }
         guard response.statusCode == 200 else { throw OpenAIError.http(response.statusCode, String(raw.prefix(2000))) }
         if let failure = parser.failure { throw OpenAIError.stream(failure) }
