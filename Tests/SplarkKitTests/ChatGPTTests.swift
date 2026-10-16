@@ -55,8 +55,8 @@ import Testing
     @Test func cancelledSignInNeverCallsTheTokenEndpoint() async {
         let stub = StubTransport(json: #"{"access_token":"should-not-be-used"}"#)
         let auth = ChatGPTAuth(transport: stub)
-        await #expect(throws: ChatGPTAuthError.missingCode) {
-            try await auth.exchange(callback: ["error": "access_denied", "state": "s"], expectedState: "s", pkce: .random(), port: 1, hostId: "h", priorClientId: nil)
+        await #expect(throws: ChatGPTAuthError.denied(error: "access_denied", description: "User cancelled")) {
+            try await auth.exchange(callback: ["error": "access_denied", "error_description": "User cancelled", "state": "s"], expectedState: "s", pkce: .random(), port: 1, hostId: "h", priorClientId: nil)
         }
         #expect(stub.requests.isEmpty)
     }

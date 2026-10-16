@@ -15,6 +15,16 @@ import Testing
         #expect(try await waiter.value.query == ["code": "abc 123", "state": "xyz"])
     }
 
+    @Test func aCancelledSignInGetsACancelledPageNotASuccessPage() async throws {
+        let server = try LoopbackServer(port: 0, path: "/callback")
+        let waiter = Task { try await server.waitForCallback(timeout: .seconds(5)) }
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(server.port)/callback?error=access_denied&state=s")!)
+        let page = String(decoding: data, as: UTF8.self)
+        #expect(page.contains("cancelled"))
+        #expect(!page.contains("You're connected"))
+        #expect(try await waiter.value.query["error"] == "access_denied")
+    }
+
     @Test func keepsACallbackThatArrivesBeforeWaiting() async throws {
         let server = try LoopbackServer(port: 0, path: "/callback")
         _ = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(server.port)/callback?code=early&state=s")!)

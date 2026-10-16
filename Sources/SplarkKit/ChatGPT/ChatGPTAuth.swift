@@ -16,7 +16,7 @@ public struct ChatGPTCredentials: Codable, Sendable, Equatable {
     public func needsRefresh(now: Date) -> Bool { expiresAt.timeIntervalSince(now) < 300 }
 }
 
-public enum ChatGPTAuthError: Error, Equatable { case stateMismatch, missingCode, http(Int, String), decoding(String) }
+public enum ChatGPTAuthError: Error, Equatable { case stateMismatch, missingCode, denied(error: String, description: String?), http(Int, String), decoding(String) }
 
 public struct ChatGPTAuth: Sendable {
     public static let authorizeEndpoint = URL(string: "https://auth.openai.com/api/accounts/authorize")!
@@ -78,6 +78,7 @@ public struct ChatGPTAuth: Sendable {
     /// Exchanges the callback for credentials. The callback may carry the newly issued `client_id`.
     public func exchange(callback: [String: String], expectedState: String, pkce: PKCE, port: UInt16, hostId: String, priorClientId: String?) async throws -> ChatGPTCredentials {
         guard callback["state"] == expectedState else { throw ChatGPTAuthError.stateMismatch }
+        if let error = callback["error"] { throw ChatGPTAuthError.denied(error: error, description: callback["error_description"]) }
         guard let code = callback["code"], !code.isEmpty else { throw ChatGPTAuthError.missingCode }
         let clientId = callback["client_id"] ?? priorClientId ?? Self.dynamicClientId
         let token = try await tokenRequest([

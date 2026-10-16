@@ -13,6 +13,7 @@ public final class LoopbackServer: @unchecked Sendable {
     public let port: UInt16
     private let path: String
     private let successHTML: String
+    private let cancelledHTML: String
     private let queue = DispatchQueue(label: "splark.loopback")
     private var listeners: [NWListener] = []
     private var continuation: CheckedContinuation<Callback, Error>?
@@ -20,9 +21,11 @@ public final class LoopbackServer: @unchecked Sendable {
     private var finished = false
 
     /// Binds 127.0.0.1 and, unless `ipv4Only`, ::1 on `port` (0 = pick a free port).
-    public init(port: UInt16, path: String, ipv4Only: Bool = false, successHTML: String = LoopbackServer.defaultHTML) throws {
+    public init(port: UInt16, path: String, ipv4Only: Bool = false,
+                successHTML: String = LoopbackServer.defaultHTML, cancelledHTML: String = LoopbackServer.cancelledHTML) throws {
         self.path = path
         self.successHTML = successHTML
+        self.cancelledHTML = cancelledHTML
         let v4 = try Self.makeListener(host: "127.0.0.1", port: port)
         let actualPort = try Self.start(v4, on: queue)
         self.port = actualPort
@@ -39,6 +42,13 @@ public final class LoopbackServer: @unchecked Sendable {
     <!doctype html><html><head><meta charset="utf-8"><title>Splark</title></head>
     <body style="font-family:-apple-system,sans-serif;color:#3a3a3e;text-align:center;padding-top:80px">
     <h2 style="font-weight:600">You're connected.</h2><p>You can close this tab and go back to Splark.</p></body></html>
+    """
+
+    /// Shown when the redirect carries no `code` (the user clicked Cancel, or the provider refused).
+    public static let cancelledHTML = """
+    <!doctype html><html><head><meta charset="utf-8"><title>Splark</title></head>
+    <body style="font-family:-apple-system,sans-serif;color:#3a3a3e;text-align:center;padding-top:80px">
+    <h2 style="font-weight:600">Sign-in was cancelled.</h2><p>Nothing was connected. You can close this tab and try again from Splark.</p></body></html>
     """
 
     /// Waits for the first request whose path matches, then stops listening.
@@ -121,7 +131,8 @@ public final class LoopbackServer: @unchecked Sendable {
     private func respond(_ connection: NWConnection, head: String) {
         let callback = Self.parse(requestHead: head)
         let matched = callback?.path == path
-        let body = matched ? successHTML : "Not found"
+        let gotCode = !(callback?.query["code"] ?? "").isEmpty
+        let body = matched ? (gotCode ? successHTML : cancelledHTML) : "Not found"
         let status = matched ? "200 OK" : "404 Not Found"
         let response = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
         connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
