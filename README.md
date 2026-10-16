@@ -4,7 +4,7 @@ Slack, sorted by what needs you.
 
 Splark is a small macOS menu-bar app. A pixel spark in the menu bar lights up when Slack needs you. Click it to see every unread conversation summarised in a line and sorted into three levels: **needs action**, **question for you** and **just comments**. Then reply, react or mark things as read without opening Slack.
 
-> **Status: early development.** Nothing to install yet. The foundation is built, and the Slack and ChatGPT integrations have been tried on real accounts ([`docs/spikes.md`](docs/spikes.md)). Still open: Slack token refresh and badge behaviour with macOS badges off. The engine and the panel come next. The design spec is in [`docs/superpowers/specs`](docs/superpowers/specs/2026-10-16-splark-design.md), and the interactive prototypes are in [`design/prototype`](design/prototype); open the HTML files in a browser.
+> **Status: early development.** Nothing to install yet. The foundation is built, and the Slack and ChatGPT integrations have been tried on real accounts ([`docs/spikes.md`](docs/spikes.md)). Slack's 12-hour tokens refresh without a client secret, and Plan 2 (the engine) is written. The engine and the panel come next. The design spec is in [`docs/superpowers/specs`](docs/superpowers/specs/2026-10-16-splark-design.md), and the interactive prototypes are in [`design/prototype`](design/prototype); open the HTML files in a browser.
 
 ## How it works
 

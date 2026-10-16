@@ -87,3 +87,17 @@ public struct SlackOAuthAccess: Decodable, Sendable {
     public let authedUser: AuthedUser
     public let team: Team?
 }
+
+/// `oauth.v2.access` with `grant_type=refresh_token`. Slack documents the token at the top level;
+/// the `authed_user` shape of the first exchange is accepted too.
+public struct SlackTokenRefresh: Decodable, Sendable {
+    public let accessToken: String?
+    public let refreshToken: String?
+    public let expiresIn: Int?
+    public let tokenType: String?
+    public let authedUser: SlackOAuthAccess.AuthedUser?
+
+    public var userAccessToken: String? { authedUser?.accessToken ?? accessToken }
+    public var userRefreshToken: String? { authedUser?.refreshToken ?? refreshToken }
+    public var userExpiresIn: Int? { authedUser?.expiresIn ?? expiresIn }
+}

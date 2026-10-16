@@ -52,4 +52,12 @@ extension SlackClient {
                        params: ["client_id": clientId, "code": code, "redirect_uri": redirectURI, "code_verifier": codeVerifier],
                        bearer: "")
     }
+
+    /// Swaps a refresh token for a new user token (Slack rotates PKCE user tokens every 12 h).
+    /// No bearer token; `clientSecret` is sent only when given.
+    public func oauthV2Refresh(clientId: String, refreshToken: String, clientSecret: String? = nil) async throws -> SlackTokenRefresh {
+        var p = ["client_id": clientId, "grant_type": "refresh_token", "refresh_token": refreshToken]
+        if let clientSecret { p["client_secret"] = clientSecret }
+        return try await call("oauth.v2.access", tier: .tier4, params: p, bearer: "")
+    }
 }

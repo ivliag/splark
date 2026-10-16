@@ -9,9 +9,9 @@ What the spec's §13 risks turned out to be, measured on real accounts. Plans 2 
 - Everything read: `splark-dev badge` → `none` (2026-10-16 10:19)
 - (After the final review, `SlackBadge.none` was renamed `.clear`; the readings below are as printed at the time.)
 - DM or mention arrives: `10:46:52  count(1)`. Read it: `10:47:13  none`. Both picked up within the 2 s poll.
-- macOS "Badge application icon" off: **not yet run**. If it makes `lsappinfo` report an empty label rather than nothing, Splark would read "clear" while unread messages exist. Run this before writing Plan 2.
+- macOS "Badge application icon" off (2026-10-16 15:48–15:52, run by Ivan): `lsappinfo` kept reporting Slack's badge, `count(1)` → `count(2)` → `count(3)` → `count(2)` → `count(1)` → `clear`, as messages arrived and were read. The StatusLabel is Slack's own badge, not what macOS shows in the Dock.
 - Slack quit: not exercised against the real app. A unit test covers that `current()` is nil when Slack isn't running.
-- **Decision:** the badge signal works for none / dot / count on macOS 26.5.1 and is used as a trigger. How it behaves with macOS badges off is unknown, so Plan 2 keeps it optional, as the spec says: schedule-only polling when it's unavailable, and Settings shows whether it's available.
+- **Decision:** the badge signal works for clear / dot / count on macOS 26.5.1, with macOS badges on or off, and is used as a trigger. It stays optional, as the spec says: schedule-only polling when it's unavailable, and Settings shows whether it's available. Plan 2 still lets a clear badge clear thread items only after a lit one has been seen since Slack started. That is a cheap safeguard for a badge that never lights up.
 
 ## 1. Private Slack app with PKCE
 
@@ -25,6 +25,16 @@ Run 2026-10-16 against the Twain workspace (211 conversations).
   1. Store the refresh token, `client_id` and token expiry with each workspace, and refresh before expiry with `oauth.v2.access grant_type=refresh_token`. The first Plan 2 task verifies the refresh live. If a no-secret refresh is refused, store the user's own app `client_secret` (returned by apps.manifest.create) in the Keychain and refresh with it.
   2. Ask the user to re-authorise (Allow only, same app, no new config token) when the refresh token has expired.
   3. Treat a zero `last_read` as "nothing read". For DMs, rely on `unread_count_display`; skip the history call when it is 0.
+
+### Token refresh (2026-10-16, before Plan 2)
+
+Run with `splark-dev slack-reauth` (Allow only, same app A0C9LFCEJQK, no config token) and then `splark-dev slack-refresh`, twice.
+
+- `oauth.v2.access` with `grant_type=refresh_token`, `client_id` and `refresh_token`, and **no client secret**: **worked**. The new token passed `auth.test`.
+- The refresh response is **top-level**, not under `authed_user`: `access_token`, `refresh_token`, `expires_in` (43200), `token_type`, `user_id`, `scope`, `team`. It also warns `superfluous_charset` about the `charset=utf-8` in our Content-Type; this is harmless.
+- **Each refresh issues a new refresh token.** The previous refresh token was still accepted once afterwards, and using it didn't invalidate the newer one: refreshing again with the stored token worked.
+- **The previous access token stays valid** right after a refresh.
+- **Decision:** refresh without a client secret, so Splark never stores one. Refresh when the token is within 30 minutes of expiry, or on a `token_expired` error. Save the new token and refresh token to the Keychain before using them. A crash between refreshing and saving is recoverable, because the old refresh token still works. The user is asked to re-authorise only when the refresh itself fails with `invalid_refresh_token`.
 
 ## 4. Mention sweep
 
