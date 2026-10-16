@@ -1,8 +1,8 @@
 import AppKit
 
-/// What Slack's Dock badge currently says.
+/// What Slack's Dock badge currently says. `nil` (as `SlackBadge?`) means unavailable: Slack isn't running or the badge can't be read.
 public enum SlackBadge: Equatable, Sendable {
-    case none          // no badge
+    case clear         // no badge: nothing unread (named so it never collides with Optional.none)
     case dot           // "•": unread activity, nothing for you specifically
     case count(Int)    // DMs, mentions, keywords, followed threads
 
@@ -10,9 +10,9 @@ public enum SlackBadge: Equatable, Sendable {
     public static func parse(lsappinfoOutput output: String) -> SlackBadge? {
         guard let range = output.range(of: #""label"="([^"]*)""#, options: .regularExpression) else { return nil }
         let label = output[range].dropFirst("\"label\"=\"".count).dropLast()
-        if label.isEmpty { return SlackBadge.none }
+        if label.isEmpty { return .clear }
         let digits = label.prefix(while: \.isNumber)
-        if let n = Int(digits) { return n > 0 ? .count(n) : SlackBadge.none }   // "99+" → 99
+        if let n = Int(digits) { return n > 0 ? .count(n) : .clear }   // "99+" → 99
         return .dot
     }
 }

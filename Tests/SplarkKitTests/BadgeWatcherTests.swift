@@ -4,10 +4,10 @@ import Testing
 
 @Suite struct BadgeWatcherTests {
     @Test(arguments: [
-        (#""StatusLabel"={ "label"="" }"#, SlackBadge?.some(.none)),
+        (#""StatusLabel"={ "label"="" }"#, SlackBadge?.some(.clear)),
         (#""StatusLabel"={ "label"="•" }"#, .some(.dot)),
         (#""StatusLabel"={ "label"="12" }"#, .some(.count(12))),
-        (#""StatusLabel"={ "label"="0" }"#, .some(.none)),
+        (#""StatusLabel"={ "label"="0" }"#, .some(.clear)),
         (#""StatusLabel"={ "label"="!" }"#, .some(.dot)),
         (#""StatusLabel"={ "label"="99+" }"#, .some(.count(99))),
         ("", nil),
