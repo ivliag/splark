@@ -22,3 +22,12 @@ func fail(_ message: String) -> Never {
 }
 
 func openInBrowser(_ url: URL) { NSWorkspace.shared.open(url) }
+
+/// Reads a secret the user just copied, then clears the clipboard. Secrets never go on a command line,
+/// where a process listing would show them.
+@MainActor func clipboardSecret() throws -> String {
+    let value = (NSPasteboard.general.string(forType: .string) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    NSPasteboard.general.clearContents()
+    guard !value.isEmpty else { fail("the clipboard is empty: copy the token first") }
+    return value
+}
