@@ -58,13 +58,25 @@ public struct OpenAIClient: Sendable {
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await transport.send(request)
         guard response.statusCode == 200 else { throw OpenAIError.http(response.statusCode, String(decoding: data, as: UTF8.self)) }
-        struct List: Decodable { struct Model: Decodable { let id: String }; let data: [Model] }
-        return try JSONDecoder().decode(List.self, from: data).data.map(\.id).sorted()
+        // API keys get {"data":[{"id":…}]}; ChatGPT-plan tokens get {"models":[{"slug":…,"visibility":…,"supported_in_api":…}]}.
+        struct List: Decodable {
+            struct APIModel: Decodable { let id: String }
+            struct PlanModel: Decodable { let slug: String; let visibility: String?; let supported_in_api: Bool? }
+            let data: [APIModel]?
+            let models: [PlanModel]?
+        }
+        let list = try JSONDecoder().decode(List.self, from: data)
+        let ids = list.data?.map(\.id)
+            ?? list.models?.filter { $0.visibility != "hide" && $0.supported_in_api != false }.map(\.slug)
+            ?? []
+        return ids.sorted()
     }
 
     /// The request body: always `stream: true`, `store: false`, instructions (never a system message).
     public static func responsesBody(model: String, instructions: String, input: String, schemaName: String?, schema: [String: Any]?) -> Data {
-        var body: [String: Any] = ["model": model, "instructions": instructions, "input": input, "stream": true, "store": false]
+        // Plan tokens reject a bare string ("Input must be a list"): send one user message.
+        let message: [String: Any] = ["type": "message", "role": "user", "content": [["type": "input_text", "text": input]]]
+        var body: [String: Any] = ["model": model, "instructions": instructions, "input": [message], "stream": true, "store": false]
         if let schemaName, let schema {
             body["text"] = ["format": ["type": "json_schema", "name": schemaName, "schema": schema, "strict": true]]
         }

@@ -3,7 +3,10 @@ import Foundation
 
 // Shared helpers for splark-dev commands.
 
-let args = Array(CommandLine.arguments.dropFirst())
+let args: [String] = {
+    setvbuf(stdout, nil, _IOLBF, 0)   // line-buffered, so redirected logs show progress live
+    return Array(CommandLine.arguments.dropFirst())
+}()
 
 func option(_ name: String) -> String? {
     guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }

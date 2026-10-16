@@ -33,6 +33,14 @@ func chatgptProbeCommand() async throws {
         print("refreshed access token")
     }
     let client = OpenAIClient()
+    if args.contains("--raw-models") {
+        var request = URLRequest(url: OpenAIClient.baseURL.appendingPathComponent("models"))
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        print("GET /v1/models → HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+        print(String(decoding: data, as: UTF8.self))
+        return
+    }
     let models = try await client.listModels(accessToken: creds.accessToken)
     print("models (\(models.count)): \(models.joined(separator: ", "))")
     guard let model = option("--model") ?? models.first(where: { $0.contains("nano") }) ?? models.first(where: { $0.contains("mini") }) ?? models.first else { fail("no models") }

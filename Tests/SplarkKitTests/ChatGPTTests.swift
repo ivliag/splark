@@ -116,6 +116,21 @@ import Testing
         #expect(format["type"] as? String == "json_schema" && format["strict"] as? Bool == true)
     }
 
+    @Test func inputIsSentAsAListWithOneUserMessage() throws {
+        let data = OpenAIClient.responsesBody(model: "m", instructions: "i", input: "hello", schemaName: nil, schema: nil)
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let input = try #require(body["input"] as? [[String: Any]])
+        #expect(input.count == 1)
+        #expect(input[0]["type"] as? String == "message" && input[0]["role"] as? String == "user")
+        let content = try #require(input[0]["content"] as? [[String: Any]])
+        #expect(content.count == 1 && content[0]["type"] as? String == "input_text" && content[0]["text"] as? String == "hello")
+    }
+
+    @Test func listModelsReadsThePlanShapeAndSkipsHiddenModels() async throws {
+        let stub = StubTransport(json: #"{"models":[{"slug":"gpt-6-luna","visibility":"list","supported_in_api":true},{"slug":"codex-auto-review","visibility":"hide","supported_in_api":true},{"slug":"gpt-5.6-luna","visibility":"list","supported_in_api":true},{"slug":"web-only","visibility":"list","supported_in_api":false}]}"#)
+        #expect(try await OpenAIClient(transport: stub).listModels(accessToken: "t") == ["gpt-5.6-luna", "gpt-6-luna"])
+    }
+
     @Test func listModelsSortsIds() async throws {
         let stub = StubTransport(json: #"{"object":"list","data":[{"id":"gpt-b"},{"id":"gpt-a"}]}"#)
         #expect(try await OpenAIClient(transport: stub).listModels(accessToken: "t") == ["gpt-a", "gpt-b"])

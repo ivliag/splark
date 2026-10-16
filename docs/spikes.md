@@ -36,3 +36,22 @@ Run 2026-10-16 against the Twain workspace (211 conversations).
 - 3 rapid history calls took 0.5 s, so there's no 1-per-minute clamp.
 - `users.conversations`: 211 conversations in 0.3 s (2 pages).
 - **Decision:** normal Tier 3 limits. The spec's schedule stands.
+
+## 3. Sign in with ChatGPT
+
+Run 2026-10-16 with a personal ChatGPT account.
+
+- **Dynamic registration** (`client_id=dynamic_agent_client`):
+  - It worked once `ext_agent_host_id` was a lowercase `urn:uuid:…`.
+  - A bare uppercase UUID was rejected: `{"error":{"message":"Invalid authorize request","param":"ext_agent_host_id","code":"invalid_authorize_request"}}`.
+- **Callback query keys:** `client_id`, `code`, `scope`, `state`. The issued `client_id` (`oaiapp_…`) arrives in the callback.
+- **Granted scopes** include `chatgpt.tokens.use.direct`.
+- **Tokens:** the access token lasts 1 hour, and a refresh token is returned.
+- **`GET /v1/models`** with a plan token returns `{"models":[{"slug","visibility","supported_in_api",…}]}`, not `{"data":[{"id"}]}`.
+  - Listed: `gpt-6-luna` ("Fast and affordable model for easier tasks"), `gpt-5.6-luna` and `gpt-5.6-terra`.
+  - Hidden: `gpt-reserve` and `codex-auto-review`.
+- **`POST /v1/responses`** with a plan token rejects a string `input` with "Input must be a list". `input` must be `[{"type":"message","role":"user","content":[{"type":"input_text","text":…}]}]`.
+- **Output:**
+  - With a `json_schema`, gpt-6-luna answered in 2.5 s: `{"lead":"Approve the rollback now; checkout is failing for EU cards.","level":"action"}`.
+  - Without a schema it took 3.4 s and returned valid JSON, but with keys of its own choosing.
+- **Decision:** Plan 2 uses `text.format` json_schema. Its default triage model is the first available of `gpt-6-luna`, then `gpt-5.6-luna`, then the first listed model. Credentials refresh before the 1-hour expiry.
