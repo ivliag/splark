@@ -15,6 +15,7 @@ usage: splark-dev <command>
   chatgpt-login                       Sign in with ChatGPT
   chatgpt-probe [--model M]           list models and send a tiny structured request
   inbox [--minutes N] [--no-text]     run the whole engine against your Slack and ChatGPT, printing the inbox
+  triage-eval [--model M]             score the triage evaluation set against your ChatGPT plan
 """
 
 do {
@@ -28,6 +29,7 @@ do {
     case "chatgpt-login": try await chatgptLoginCommand()
     case "chatgpt-probe": try await chatgptProbeCommand()
     case "inbox": try await inboxCommand()
+    case "triage-eval": try await triageEvalCommand()
     default: print(usage)
     }
 } catch {
