@@ -45,6 +45,30 @@ public struct SlackMessage: Decodable, Sendable, Equatable {
     public let replyCount: Int?
     public let latestReply: String?
     public let replyUsers: [String]?
+    public let files: [SlackFile]?
+    public let botProfile: SlackBotProfile?
+}
+
+public struct SlackFile: Decodable, Sendable, Equatable { public let name: String?; public let title: String? }
+public struct SlackBotProfile: Decodable, Sendable, Equatable { public let name: String? }
+
+public struct SlackUser: Decodable, Sendable, Equatable {
+    public struct Profile: Decodable, Sendable, Equatable { public let displayName: String?; public let realName: String? }
+    public let id: String
+    public let name: String?
+    public let realName: String?
+    public let profile: Profile?
+
+    /// What Slack shows: the display name, else the full name, else the handle.
+    public var displayName: String {
+        [profile?.displayName, profile?.realName, realName, name].compactMap { $0 }.first { !$0.isEmpty } ?? id
+    }
+}
+
+public struct SlackPostedMessage: Decodable, Sendable, Equatable {
+    public let channel: String
+    public let ts: String
+    public init(channel: String, ts: String) { self.channel = channel; self.ts = ts }
 }
 
 public struct SlackHistory: Decodable, Sendable {
@@ -62,6 +86,11 @@ public struct SlackSearchResult: Decodable, Sendable {
         public let user: String?
         public let text: String?
         public let permalink: String?
+
+        /// Search results don't say which thread a reply is in; its permalink does (`?thread_ts=…`).
+        public var threadTs: String? {
+            permalink.flatMap { URLComponents(string: $0)?.queryItems?.first { $0.name == "thread_ts" }?.value }
+        }
     }
     public let messages: Matches
 }
