@@ -41,11 +41,22 @@ public struct SyncUpdate: Sendable, Equatable {
     }
 }
 
+/// What a workspace's sync remembers across launches: IDs and timestamps only (spec §8).
+public struct SyncMemory: Codable, Sendable, Equatable {
+    public var threads = ThreadTracker()
+    public var sweptThrough: String?   // the newest search hit already handled
+    public init() {}
+}
+
 /// Finds one workspace's unread conversations (spec §6.3). `step()` does the most overdue piece of work
 /// and returns; the app calls it in a loop and sleeps until `nextWake` when nothing is due.
 public actor SyncEngine {
     public struct Config: Sendable {
         public var inventoryInterval: TimeInterval = 1800
+        public var sweepInterval: TimeInterval = 120
+        public var firstSweepLookback: TimeInterval = 86400
+        public var sweepOverlap: TimeInterval = 600            // search indexes late: look again at the last 10 minutes
+        public var threadExpiry: TimeInterval = 86400         // thread items clear after a day when there's no badge to trust
         public var unreadHorizon: TimeInterval = 14 * 86400   // older unread messages are left out
         public var historyLimit = 40
         public var contextCount = 3
@@ -74,13 +85,20 @@ public actor SyncEngine {
     private var inventory: [String: SlackConversation] = [:]
     private var inventoryDue = Date.distantPast
     private var readThrough: [String: String] = [:]   // marked read in Splark; Slack's last_read may lag behind
+    private var sweepDue = Date.distantPast
+    private var inventoryLoaded = false
+    private var sweptHits: [String: Date] = [:]        // "channel/ts" of search hits already handled, within the overlap
+    private var badge: SlackBadge?
+    private var badgeSeenLit = false   // a clear badge counts only after a lit one: badges may be off in macOS
     private var failures = 0
+    public private(set) var memory: SyncMemory
     public private(set) var snapshots: [ItemKey: ConversationSnapshot] = [:]
     public private(set) var status = SyncStatus()
 
-    public init(workspace: Workspace, slack: SlackAPI, names: UserDirectory, excluded: Set<String> = [],
-                config: Config = Config(), now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(workspace: Workspace, slack: SlackAPI, names: UserDirectory, memory: SyncMemory = SyncMemory(),
+                excluded: Set<String> = [], config: Config = Config(), now: @escaping @Sendable () -> Date = { Date() }) {
         self.workspace = workspace
+        self.memory = memory
         self.slack = slack
         self.names = names
         self.excluded = excluded
@@ -89,7 +107,7 @@ public actor SyncEngine {
         self.schedule = SyncSchedule(intervals: config.schedule)
     }
 
-    private enum Job { case inventory, conversation(String) }
+    private enum Job { case inventory, sweep, conversation(String), thread(ThreadWatch) }
 
     public func step() async -> Step {
         let now = now()
@@ -110,14 +128,54 @@ public actor SyncEngine {
     }
 
     /// Marked read in Splark: hide it now, and keep it hidden until Slack's read marker catches up.
+    /// Threads have no read marker in Slack, so their line moves instead.
     /// Anything newer than `ts` that arrived meanwhile stays.
     public func markedRead(_ key: ItemKey, through ts: String) -> SyncUpdate {
-        readThrough[key.channelId] = SlackTS.latest(readThrough[key.channelId], ts)
+        if let threadTs = key.threadTs {
+            memory.threads.clear(channelId: key.channelId, threadTs: threadTs, through: ts)
+        } else {
+            readThrough[key.channelId] = SlackTS.latest(readThrough[key.channelId], ts)
+        }
         guard let snapshot = snapshots[key], SlackTS.isAfter(snapshot.newestTs, ts) else { return removing(key) }
         let read = snapshot.unread.filter { !SlackTS.isAfter($0.ts, ts) }
         return upserting(ConversationSnapshot(key: key, kind: snapshot.kind, title: snapshot.title,
                                               unread: snapshot.unread.filter { SlackTS.isAfter($0.ts, ts) },
                                               context: Array((snapshot.context + read).suffix(config.contextCount)), moreUnread: false))
+    }
+
+    /// Splark posted a reply. In a thread, everything before it is read, and later replies are watched.
+    public func didReply(channelId: String, threadTs: String?, ts: String) {
+        guard let threadTs else { return }
+        memory.threads.userReplied(channelId: channelId, threadTs: threadTs, ts: ts, now: now())
+    }
+
+    /// Slack's Dock badge changed (spec §6.3 steps 3 and 5): check DMs, busy conversations and threads now.
+    /// A clear badge means the user has caught up in Slack, threads included, but only once a lit badge has been seen.
+    public func badgeChanged(_ badge: SlackBadge?) -> SyncUpdate {
+        let previous = self.badge
+        self.badge = badge
+        switch badge {
+        case .dot?, .count?: badgeSeenLit = true
+        case nil: badgeSeenLit = false   // Slack quit: start over
+        case .clear?: break
+        }
+        guard badge != previous, badge != nil else { return SyncUpdate() }
+        schedule.wakeDirect(now: now())
+        memory.threads.wakeAll()
+        guard badge == .clear, badgeSeenLit else { return SyncUpdate() }
+        memory.threads.clearAll(through: SlackTS.ts(now()))   // threads without an item yet too
+        var update = SyncUpdate()
+        for key in snapshots.keys where key.threadTs != nil { update.merge(removing(key)) }
+        return update
+    }
+
+    /// "Refresh now": DMs, busy conversations, threads and the mention sweep, straight away.
+    public func refreshNow() {
+        let now = now()
+        schedule.wakeDirect(now: now)
+        memory.threads.wakeAll()
+        sweepDue = .distantPast
+        if case .offline? = status.problem { status.problem = .offline(retryAt: now) }
     }
 
     public func setExcluded(_ ids: Set<String>) -> SyncUpdate {
@@ -129,19 +187,26 @@ public actor SyncEngine {
         return update
     }
 
+    /// The inventory first; then whatever has waited longest: a conversation, a thread or the sweep.
     private func nextJob(now: Date) -> Job? {
         if inventoryDue <= now { return .inventory }
-        return schedule.next(now: now).map(Job.conversation)
+        var candidates: [(due: Date, rank: Int, job: Job)] = []
+        if let id = schedule.next(now: now), let due = schedule.entries[id]?.due { candidates.append((due, 0, .conversation(id))) }
+        if let watch = memory.threads.due(now: now).first { candidates.append((watch.due, 1, .thread(watch))) }
+        if inventoryLoaded, sweepDue <= now { candidates.append((sweepDue, 2, .sweep)) }
+        return candidates.min { ($0.due, $0.rank) < ($1.due, $1.rank) }?.job
     }
 
     private var nextWake: Date? {
-        [inventoryDue, schedule.nextDue].compactMap { $0 }.min()
+        [inventoryDue, sweepDue, schedule.nextDue, memory.threads.nextDue].compactMap { $0 }.min()
     }
 
     private func run(_ job: Job, now: Date) async throws -> SyncUpdate {
         switch job {
         case .inventory: return try await takeInventory(now: now)
+        case .sweep: return try await sweep(now: now)
         case .conversation(let id): return try await check(id, now: now)
+        case .thread(let watch): return try await check(watch, now: now)
         }
     }
 
@@ -152,6 +217,8 @@ public actor SyncEngine {
         inventory = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         schedule.setInventory(inventory.mapValues(\.kind), now: now)
         inventoryDue = now.addingTimeInterval(config.inventoryInterval)
+        inventoryLoaded = true
+        memory.threads.prune(now: now)
         var update = SyncUpdate()
         for key in snapshots.keys where inventory[key.channelId] == nil { update.merge(removing(key)) }   // left or archived
         return update
@@ -173,6 +240,7 @@ public actor SyncEngine {
             page = try await slack.conversationsHistory(id, oldest: SlackTS.latest(lastRead, horizon), latest: nil, inclusive: false, limit: limit)
         }
         let fetched = page?.messages ?? []
+        watchThreads(in: fetched, channelId: id, now: now)
         let line = SlackTS.latest(lastRead, readThrough[id])
         let unread = fetched
             .filter { message in isShown(message) && message.user != workspace.userId && line.map { SlackTS.isAfter(message.ts, $0) } ?? true }
@@ -184,15 +252,115 @@ public actor SyncEngine {
         if let existing = snapshots[key], existing.newestTs == newest.ts, existing.unread.count == unread.count { return SyncUpdate() }
         let context = try await slack.conversationsHistory(id, oldest: nil, latest: first.ts, inclusive: false, limit: config.contextCount)
             .messages.filter(isShown).sorted(by: oldestFirst)
+        watchThreads(in: context, channelId: id, now: now)
         let built = await snapshot(key, kind: kind(of: conversation), conversation: conversation,
                                    unread: unread, context: context, moreUnread: page?.hasMore ?? false)
         return isWanted(key, newest: built.newestTs) ? upserting(built) : removing(key)
     }
 
-    /// After a check's awaits: the user may have excluded the channel or marked it read meanwhile.
+    /// After a check's awaits: the user may have excluded the channel, marked it read or cleared its thread meanwhile.
     private func isWanted(_ key: ItemKey, newest: String) -> Bool {
         guard inventory[key.channelId] != nil, !excluded.contains(key.channelId) else { return false }
+        if let threadTs = key.threadTs {
+            guard let line = memory.threads.watch(channelId: key.channelId, threadTs: threadTs)?.seenThrough else { return false }
+            return SlackTS.isAfter(newest, line)
+        }
         return readThrough[key.channelId].map { SlackTS.isAfter(newest, $0) } ?? true
+    }
+
+    // MARK: Threads and the mention sweep (spec §6.3 steps 4 and 5)
+
+    /// Threads the user started or replied to, seen in history. Replies from the last day count until
+    /// the first check finds where the user's own last reply is.
+    private func watchThreads(in messages: [SlackMessage], channelId: String, now: Date) {
+        let me = workspace.userId
+        for message in messages where (message.replyCount ?? 0) > 0 && (message.user == me || message.replyUsers?.contains(me) == true) {
+            let known = memory.threads.watch(channelId: channelId, threadTs: message.ts) != nil
+            let baseline = SlackTS.latest(message.ts, SlackTS.ts(now.addingTimeInterval(-config.threadExpiry))) ?? message.ts
+            memory.threads.watch(channelId: channelId, threadTs: message.ts, seenThrough: baseline,
+                                 activity: SlackTS.date(message.latestReply ?? message.ts), now: now)
+            if known, let latest = message.latestReply, memory.threads.isUnseen(latest, channelId: channelId, threadTs: message.ts) {
+                memory.threads.wake(channelId: channelId, threadTs: message.ts)
+            }
+        }
+    }
+
+    private func check(_ watch: ThreadWatch, now: Date) async throws -> SyncUpdate {
+        let key = ItemKey(teamId: workspace.teamId, channelId: watch.channelId, threadTs: watch.threadTs)
+        guard !excluded.contains(watch.channelId) else {
+            memory.threads.remove(channelId: watch.channelId, threadTs: watch.threadTs)
+            return removing(key)
+        }
+        let me = workspace.userId
+        // Replies come oldest first: page until the newest, so a long thread doesn't freeze on its first 40.
+        var fetched: [SlackMessage] = []
+        var parent: SlackMessage?
+        var hasMore = false
+        var oldest = watch.seenThrough
+        for _ in 0..<5 {
+            let page = try await slack.conversationsReplies(watch.channelId, ts: watch.threadTs, oldest: oldest, limit: config.historyLimit)
+            parent = parent ?? page.messages.first { $0.ts == watch.threadTs }
+            let fresh = page.messages.filter { $0.ts != watch.threadTs && SlackTS.isAfter($0.ts, oldest) }
+            fetched += fresh
+            hasMore = page.hasMore ?? false
+            guard hasMore, let last = SlackTS.latest(fresh.map(\.ts)) else { break }
+            oldest = last
+        }
+        let replies = fetched.filter(isShown).sorted(by: oldestFirst)
+        if let mine = replies.last(where: { $0.user == me }) {
+            memory.threads.userReplied(channelId: watch.channelId, threadTs: watch.threadTs, ts: mine.ts, now: now)
+        }
+        let line = memory.threads.watch(channelId: watch.channelId, threadTs: watch.threadTs)?.seenThrough ?? watch.seenThrough
+        let unread = replies.filter { $0.user != me && SlackTS.isAfter($0.ts, line) }
+        memory.threads.checked(channelId: watch.channelId, threadTs: watch.threadTs, newestReply: SlackTS.latest(fetched.map(\.ts)), now: now)
+
+        guard let first = unread.first, let newest = unread.last else { return removing(key) }
+        if !badgeSeenLit, now.timeIntervalSince(SlackTS.date(newest.ts)) > config.threadExpiry {
+            memory.threads.clear(channelId: watch.channelId, threadTs: watch.threadTs, through: newest.ts)
+            return removing(key)
+        }
+        if let existing = snapshots[key], existing.newestTs == newest.ts, existing.unread.count == unread.count { return SyncUpdate() }
+        if parent == nil {
+            parent = try await slack.conversationsReplies(watch.channelId, ts: watch.threadTs, oldest: nil, limit: 1).messages.first { $0.ts == watch.threadTs }
+        }
+        let context = [parent].compactMap { $0 } + replies.filter { SlackTS.isAfter(first.ts, $0.ts) }.suffix(2)
+        let built = await snapshot(key, kind: .thread, conversation: inventory[watch.channelId], unread: unread, context: context, moreUnread: hasMore)
+        return isWanted(key, newest: built.newestTs) ? upserting(built) : removing(key)
+    }
+
+    /// `search.messages` for mentions of the user, and for the user's own recent replies. Search indexes late, so each
+    /// sweep looks again at the 10 minutes before the newest mention handled, skipping hits it already handled.
+    /// Thread hits start watches; a top-level mention makes its conversation due now.
+    private func sweep(now: Date) async throws -> SyncUpdate {
+        let me = workspace.userId
+        let since = memory.sweptThrough.map { SlackTS.ts(SlackTS.date($0).addingTimeInterval(-config.sweepOverlap)) }
+            ?? SlackTS.ts(now.addingTimeInterval(-config.firstSweepLookback))
+        let mentions = try await slack.searchMessages("<@\(me)>", count: 20).messages.matches
+        // Best effort: finds threads the user replied to in Slack itself. Never let it stop the mention sweep.
+        let replies = (try? await slack.searchMessages("from:<@\(me)>", count: 20))?.messages.matches ?? []
+        sweptHits = sweptHits.filter { now.timeIntervalSince($0.value) < 2 * config.sweepOverlap }
+        func fresh(_ hit: SlackSearchResult.Match) -> Bool {
+            SlackTS.isAfter(hit.ts, since) && inventory[hit.channel.id] != nil && sweptHits.updateValue(now, forKey: "\(hit.channel.id)/\(hit.ts)") == nil
+        }
+        for hit in mentions where fresh(hit) {
+            if let threadTs = hit.threadTs, threadTs != hit.ts {
+                let known = memory.threads.watch(channelId: hit.channel.id, threadTs: threadTs) != nil
+                memory.threads.watch(channelId: hit.channel.id, threadTs: threadTs, seenThrough: SlackTS.justBefore(hit.ts),
+                                     activity: SlackTS.date(hit.ts), now: now)
+                if known, memory.threads.isUnseen(hit.ts, channelId: hit.channel.id, threadTs: threadTs) {
+                    memory.threads.wake(channelId: hit.channel.id, threadTs: threadTs)
+                }
+            } else {
+                schedule.wake(hit.channel.id)
+            }
+        }
+        for hit in replies where fresh(hit) {
+            guard let threadTs = hit.threadTs, threadTs != hit.ts else { continue }
+            memory.threads.userReplied(channelId: hit.channel.id, threadTs: threadTs, ts: hit.ts, now: now)
+        }
+        memory.sweptThrough = SlackTS.latest([memory.sweptThrough] + mentions.map(\.ts))   // the user's own messages don't move it
+        sweepDue = now.addingTimeInterval(config.sweepInterval)
+        return SyncUpdate()
     }
 
     private func snapshot(_ key: ItemKey, kind: SnapshotKind, conversation: SlackConversation?, unread: [SlackMessage],
@@ -250,7 +418,9 @@ public actor SyncEngine {
     private func postpone(_ job: Job, until: Date) {
         switch job {
         case .inventory: inventoryDue = until
+        case .sweep: sweepDue = until
         case .conversation(let id): schedule.postpone(id, until: until)
+        case .thread(let watch): memory.threads.postpone(channelId: watch.channelId, threadTs: watch.threadTs, until: until)
         }
     }
 
@@ -259,6 +429,12 @@ public actor SyncEngine {
         case .inventory:
             inventoryDue = now().addingTimeInterval(config.inventoryInterval)
             return SyncUpdate()
+        case .sweep:
+            sweepDue = now().addingTimeInterval(config.inventoryInterval)
+            return SyncUpdate()
+        case .thread(let watch):
+            memory.threads.remove(channelId: watch.channelId, threadTs: watch.threadTs)
+            return removing(ItemKey(teamId: workspace.teamId, channelId: watch.channelId, threadTs: watch.threadTs))
         case .conversation(let id):
             inventory.removeValue(forKey: id)
             schedule.setInventory(inventory.mapValues(\.kind), now: now())

@@ -16,6 +16,7 @@ final class FakeSlack: SlackAPI, @unchecked Sendable {
     private var users: [String: SlackUser] = [:]
     private var searches: [String: [SlackSearchResult.Match]] = [:]
     private var failures: [String: Error] = [:]
+    private var searchFailures: [String: Error] = [:]
     private var log: [String] = []
     private var nextTs = 1_800_100_000
     private(set) var posted: [(channel: String, text: String, threadTs: String?)] = []
@@ -71,6 +72,9 @@ final class FakeSlack: SlackAPI, @unchecked Sendable {
             }
         }
     }
+
+    /// Searches for exactly `query` throw `error` until cleared with nil.
+    func failSearch(_ query: String, with error: Error?) { lock.withLock { searchFailures[query] = error } }
 
     /// Every call to `key` ("method" or "method channel") throws `error` until cleared with nil.
     func fail(_ key: String, with error: Error?) { lock.withLock { failures[key] = error } }
@@ -144,7 +148,10 @@ final class FakeSlack: SlackAPI, @unchecked Sendable {
 
     func searchMessages(_ query: String, count: Int) async throws -> SlackSearchResult {
         try await record("search.messages")
-        let matches = lock.withLock { Array((searches[query] ?? []).prefix(count)) }
+        let matches = try lock.withLock {
+            if let error = searchFailures[query] { throw error }
+            return Array((searches[query] ?? []).prefix(count))
+        }
         return SlackSearchResult(messages: .init(total: matches.count, matches: matches))
     }
 

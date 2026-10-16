@@ -7,9 +7,9 @@ func ts(_ offset: Int) -> String { String(format: "%d.000000", 1_800_000_000 + o
 
 let lumen = Workspace(teamId: "T1", name: "Lumen", userId: "U1", userName: "ivan", url: "https://lumen.slack.com/", redirectPort: nil, appId: nil)
 
-func makeEngine(_ slack: FakeSlack, _ clock: ManualClock, excluded: Set<String> = []) -> SyncEngine {
+func makeEngine(_ slack: FakeSlack, _ clock: ManualClock, memory: SyncMemory = SyncMemory(), excluded: Set<String> = []) -> SyncEngine {
     SyncEngine(workspace: lumen, slack: slack, names: UserDirectory(now: { clock.now }) { try await slack.usersInfo($0) },
-               excluded: excluded, now: { clock.now })
+               memory: memory, excluded: excluded, now: { clock.now })
 }
 
 extension SyncEngine {
@@ -247,5 +247,189 @@ extension SyncEngine {
         clock.advance(600)
         _ = await engine.runUntilIdle()
         #expect(!slack.calls.contains("conversations.info C1"))
+    }
+}
+
+@Suite struct SyncEngineThreadTests {
+    let clock = ManualClock()
+    let parent = ts(-3000)
+    var thread: ItemKey { ItemKey(teamId: "T1", channelId: "C1", threadTs: parent) }
+
+    /// #eng with a thread Marta started and Ivan replied to; Marta has replied again since.
+    func slackWithAThread(lastRead: String) -> FakeSlack {
+        let slack = FakeSlack()
+        slack.addUser("U2", "Marta Ruiz")
+        slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: lastRead)
+        slack.post("C1", slackMessage(parent, user: "U2", text: "release plan?", replyCount: 2, latestReply: ts(-60), replyUsers: ["U1", "U2"]))
+        slack.reply("C1", thread: parent, slackMessage(ts(-2000), user: "U1", text: "draft is up", threadTs: parent))
+        slack.reply("C1", thread: parent, slackMessage(ts(-60), user: "U2", text: "are we done?", threadTs: parent))
+        return slack
+    }
+
+    @Test func repliesAfterTheUsersOwnReplyBecomeAThreadItem() async throws {
+        let engine = makeEngine(slackWithAThread(lastRead: ts(-3500)), clock)
+        let item = try #require(await engine.runUntilIdle().upserted[thread])
+        #expect(item.kind == .thread && item.title == "#eng")
+        #expect(item.unread.map(\.text) == ["are we done?"])
+        #expect(item.context.first?.text == "release plan?")
+    }
+
+    @Test func theUsersRecentRepliesFoundBySearchStartAWatch() async {
+        let slack = slackWithAThread(lastRead: ts(-10))   // the parent is read, so history won't show it
+        slack.setSearch("from:<@U1>", [("C1", ts(-2000), parent)])
+        #expect(await makeEngine(slack, clock).runUntilIdle().upserted[thread]?.unread.map(\.text) == ["are we done?"])
+    }
+
+    @Test func aMentionInAnOldThreadShowsJustTheMention() async {
+        let slack = FakeSlack()
+        slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: ts(-10))
+        slack.post("C1", slackMessage(parent, user: "U2", text: "incident", replyCount: 2, latestReply: ts(-100)))
+        slack.reply("C1", thread: parent, slackMessage(ts(-200), user: "U3", text: "looking"))
+        slack.reply("C1", thread: parent, slackMessage(ts(-100), user: "U3", text: "<@U1> can you approve?"))
+        slack.addChannel("C2", kind: .publicChannel, name: "ops", lastRead: ts(-10))
+        slack.post("C2", slackMessage(ts(-3 * 86400), user: "U2", text: "old", replyCount: 1, latestReply: ts(-2 * 86400)))
+        slack.reply("C2", thread: ts(-3 * 86400), slackMessage(ts(-2 * 86400), user: "U3", text: "<@U1> old ask"))
+        slack.setSearch("<@U1>", [("C1", ts(-100), parent), ("C2", ts(-2 * 86400), ts(-3 * 86400))])
+        let update = await makeEngine(slack, clock).runUntilIdle()
+        #expect(update.upserted[thread]?.unread.map(\.mentionsMe) == [true])
+        #expect(!slack.calls.contains("conversations.replies C2"))   // two days old: before the first sweep's look-back
+    }
+
+    @Test func aMentionSearchFindsLateIsStillHandled() async {
+        let slack = FakeSlack()
+        slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: ts(-10))
+        slack.post("C1", slackMessage(parent, user: "U2", text: "incident", replyCount: 1, latestReply: ts(-100)))
+        slack.reply("C1", thread: parent, slackMessage(ts(-100), user: "U3", text: "<@U1> can you approve?"))
+        slack.setSearch("<@U1>", [("C1", ts(-20), nil)])                 // the first sweep sees a newer, top-level mention
+        slack.setSearch("from:<@U1>", [("C9", ts(-5), ts(-50))])         // and one of the user's own messages, even newer
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        slack.setSearch("<@U1>", [("C1", ts(-20), nil), ("C1", ts(-100), parent)])   // the thread mention, indexed late
+        clock.advance(120)
+        #expect(await engine.runUntilIdle().upserted[thread] != nil)
+    }
+
+    @Test func theSweepWaitsForTheInventory() async {
+        let slack = slackWithAThread(lastRead: ts(-3500))
+        slack.fail("users.conversations", with: SlackError.rateLimited(retryAfter: 30))
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        #expect(!slack.calls.contains("search.messages"))
+        slack.fail("users.conversations", with: nil)
+        clock.advance(30)
+        _ = await engine.runUntilIdle()
+        #expect(slack.calls.contains("search.messages"))
+    }
+
+    @Test func aLongThreadShowsItsNewestReplies() async throws {
+        let slack = slackWithAThread(lastRead: ts(-3500))
+        for i in 0..<45 { slack.reply("C1", thread: parent, slackMessage(ts(-50 + i), user: "U2", text: "r\(i)", threadTs: parent)) }
+        let item = try #require(await makeEngine(slack, clock).runUntilIdle().upserted[thread])
+        #expect(item.newestTs == ts(-6))
+        #expect(item.unread.count == 46)
+    }
+
+    @Test func threadsWithNoItemYetAreClearedByATrustedClearBadge() async {
+        let slack = FakeSlack()
+        slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: ts(-3500))
+        slack.post("C1", slackMessage(parent, user: "U2", text: "release plan?", replyCount: 1, latestReply: ts(-2000), replyUsers: ["U1"]))
+        slack.reply("C1", thread: parent, slackMessage(ts(-2000), user: "U1", text: "draft is up", threadTs: parent))
+        let engine = makeEngine(slack, clock)
+        _ = await engine.badgeChanged(.dot)
+        _ = await engine.runUntilIdle()
+        slack.reply("C1", thread: parent, slackMessage(ts(-30), user: "U2", text: "thanks!", threadTs: parent))   // read in Slack before Splark looks
+        _ = await engine.badgeChanged(.clear)
+        #expect(await engine.runUntilIdle().upserted[thread] == nil)
+    }
+
+    @Test func aFailingRepliesSearchDoesNotStopTheMentionSweep() async {
+        let slack = FakeSlack()
+        slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: ts(-10))
+        slack.post("C1", slackMessage(parent, user: "U2", text: "incident", replyCount: 1, latestReply: ts(-100)))
+        slack.reply("C1", thread: parent, slackMessage(ts(-100), user: "U3", text: "<@U1> can you approve?"))
+        slack.setSearch("<@U1>", [("C1", ts(-100), parent)])
+        let engine = makeEngine(slack, clock)
+        slack.failSearch("from:<@U1>", with: SlackError.api("invalid_query"))
+        #expect(await engine.runUntilIdle().upserted[thread] != nil)
+    }
+
+    @Test func threadsInExcludedChannelsAreDropped() async {
+        let engine = makeEngine(slackWithAThread(lastRead: ts(-3500)), clock)
+        _ = await engine.runUntilIdle()
+        _ = await engine.setExcluded(["C1"])
+        await engine.refreshNow()
+        _ = await engine.runUntilIdle()
+        #expect(await engine.memory.threads.watches.isEmpty)
+    }
+
+    @Test func replyingFromSplarkClearsTheThreadOnItsNextCheck() async {
+        let slack = slackWithAThread(lastRead: ts(-3500))
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        await engine.didReply(channelId: "C1", threadTs: parent, ts: ts(0))
+        clock.advance(61)
+        #expect(await engine.runUntilIdle().removed.contains(thread))
+    }
+
+    @Test func replyingInAChannelThreadStartsWatchingIt() async {
+        let engine = makeEngine(FakeSlack(), clock)
+        await engine.didReply(channelId: "C1", threadTs: ts(-500), ts: ts(0))
+        #expect(await engine.memory.threads.watch(channelId: "C1", threadTs: ts(-500))?.seenThrough == ts(0))
+    }
+
+    @Test func aBadgeChangeChecksDirectMessagesRightAway() async {
+        let slack = FakeSlack()
+        slack.addChannel("D1", kind: .im, user: "U2", lastRead: ts(-30 * 86400))
+        slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: ts(-7200))   // quiet: not woken
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        clock.advance(30)
+        slack.clearCalls()
+        _ = await engine.badgeChanged(.count(1))
+        _ = await engine.step()
+        #expect(slack.calls.first == "conversations.info D1")
+    }
+
+    @Test func aClearBadgeClearsThreadsOnlyOnceTheBadgeHasBeenSeenLit() async {
+        let engine = makeEngine(slackWithAThread(lastRead: ts(-3500)), clock)
+        _ = await engine.runUntilIdle()
+        #expect(await engine.badgeChanged(.clear).isEmpty)       // badges may be off in macOS: don't trust a clear we never saw lit
+        _ = await engine.badgeChanged(.count(1))
+        #expect(await engine.badgeChanged(.clear).removed == [thread])
+        clock.advance(61)
+        #expect(await engine.runUntilIdle().upserted[thread] == nil)
+    }
+
+    @Test func withoutABadgeAThreadItemClearsAfterADay() async {
+        let engine = makeEngine(slackWithAThread(lastRead: ts(-3500)), clock)
+        _ = await engine.runUntilIdle()
+        clock.advance(25 * 3600)
+        #expect(await engine.runUntilIdle().removed.contains(thread))
+    }
+
+    @Test func withATrustedBadgeAThreadItemWaits() async {
+        let engine = makeEngine(slackWithAThread(lastRead: ts(-3500)), clock)
+        _ = await engine.runUntilIdle()
+        _ = await engine.badgeChanged(.count(1))
+        clock.advance(25 * 3600)
+        #expect(!(await engine.runUntilIdle().removed.contains(thread)))
+    }
+
+    @Test func aThreadMarkedReadStaysClearedAfterARestart() async {
+        let slack = slackWithAThread(lastRead: ts(-3500))
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        #expect(await engine.markedRead(thread, through: ts(-60)).removed == [thread])
+        let restarted = makeEngine(slack, clock, memory: await engine.memory)
+        #expect(await restarted.runUntilIdle().upserted[thread] == nil)
+    }
+
+    @Test func refreshNowWakesTheEngine() async {
+        let slack = slackWithAThread(lastRead: ts(-3500))
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        #expect(!(await engine.step().didWork))
+        await engine.refreshNow()
+        #expect(await engine.step().didWork)
     }
 }
