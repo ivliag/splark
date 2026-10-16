@@ -4,11 +4,11 @@ import SplarkKit
 func chatgptLoginCommand() async throws {
     var prior: ChatGPTCredentials?
     if let json = try store.read(ChatGPTAuth.secretKey) { prior = try? JSONDecoder().decode(ChatGPTCredentials.self, from: Data(json.utf8)) }
-    let hostId = prior?.hostId ?? UUID().uuidString
+    let hostId = prior?.hostId ?? ChatGPTAuth.newHostId()
     let server = try LoopbackServer(port: 0, path: "/callback", ipv4Only: true)
     let pkce = PKCE.random(), state = PKCE.randomURLSafeString(byteCount: 16), nonce = PKCE.randomURLSafeString(byteCount: 16)
     let url = ChatGPTAuth.authorizeURL(clientId: prior?.clientId, hostId: hostId, port: server.port, state: state, nonce: nonce, pkce: pkce, loginHint: prior?.email)
-    print("Opening ChatGPT sign-in (port \(server.port))…")
+    print("Opening ChatGPT sign-in (port \(server.port))…\n  \(url.absoluteString)")
     openInBrowser(url)
     let callback = try await server.waitForCallback()
     print("callback keys: \(callback.query.keys.sorted())")

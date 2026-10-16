@@ -42,6 +42,10 @@ public struct ChatGPTAuth: Sendable {
 
     public static func redirectURI(port: UInt16) -> String { "http://127.0.0.1:\(port)/callback" }
 
+    /// A new `ext_agent_host_id`. OpenAI rejects anything but a lowercase RFC 4122 URN ("urn:uuid:…").
+    /// Generate once per Mac and persist it with the credentials.
+    public static func newHostId() -> String { "urn:uuid:" + UUID().uuidString.lowercased() }
+
     /// `clientId == nil` means first sign-in (dynamic registration).
     public static func authorizeURL(clientId: String?, hostId: String, port: UInt16, state: String, nonce: String, pkce: PKCE, loginHint: String? = nil) -> URL {
         var items = [

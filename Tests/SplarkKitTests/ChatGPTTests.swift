@@ -21,6 +21,12 @@ import Testing
         #expect(q["ext_agent_host_id"] == "host-1")
     }
 
+    @Test func newHostIdIsALowercaseUUIDURN() {
+        let id = ChatGPTAuth.newHostId()
+        #expect(id.range(of: #"^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"#, options: .regularExpression) != nil)
+        #expect(ChatGPTAuth.newHostId() != id)
+    }
+
     @Test func reauthorizationUsesIssuedClientAndOmitsAgentName() {
         let q = query(ChatGPTAuth.authorizeURL(clientId: "oaiapp_123", hostId: "h", port: 1, state: "s", nonce: "n", pkce: .random()))
         #expect(q["client_id"] == "oaiapp_123")
