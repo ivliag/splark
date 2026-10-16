@@ -28,8 +28,11 @@ public actor RateLimiter {
         let current = now()
         var window = (calls[method] ?? []).filter { current.timeIntervalSince($0) < 60 }
         var start = max(current, pausedUntil[method] ?? current)
-        if window.count >= tier.callsPerMinute, let oldest = window.first {
-            start = max(start, oldest.addingTimeInterval(60))
+        if window.count >= tier.callsPerMinute {
+            // The new call may start once the call `callsPerMinute` places back has left the window.
+            // Queued reservations are future-dated, so use sorted order, not the oldest entry.
+            let sorted = window.sorted()
+            start = max(start, sorted[sorted.count - tier.callsPerMinute].addingTimeInterval(60))
         }
         window.append(start)
         calls[method] = window

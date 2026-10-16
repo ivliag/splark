@@ -96,6 +96,18 @@ import Testing
         #expect(await limiter.reserve("auth.test", tier: .tier4) == 0)   // other methods unaffected
     }
 
+    @Test func queuedReservationsNeverExceedTheTierInAnyMinute() async {
+        let clock = ManualClock()
+        let limiter = RateLimiter(now: { clock.now })
+        var starts: [TimeInterval] = []
+        for _ in 0..<120 { starts.append(await limiter.reserve("conversations.info", tier: .tier3)) }
+        #expect(starts.filter { $0 == 0 }.count == 50)
+        #expect(starts.filter { $0 == 60 }.count == 50)
+        #expect(starts.filter { $0 == 120 }.count == 20)
+        let busiestMinute = starts.map { t in starts.filter { $0 >= t && $0 < t + 60 }.count }.max() ?? 0
+        #expect(busiestMinute <= 50)
+    }
+
     @Test func pauseDelaysNextCall() async {
         let clock = ManualClock()
         let limiter = RateLimiter(now: { clock.now })
