@@ -4,6 +4,10 @@ import Foundation
 
 let usage = """
 usage: splark-dev <command>
+  badge [--seconds N]                 watch Slack's Dock badge
 """
 
-print(usage)
+switch args.first {
+case "badge": await badgeCommand()
+default: print(usage)
+}
