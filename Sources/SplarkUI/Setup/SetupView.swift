@@ -30,7 +30,7 @@ public struct SetupView: View {
     /// Four sparks in the title bar: bright for the current step, brighter for done ones, dimmed for the rest.
     private func steps(_ palette: Palette) -> some View {
         HStack(spacing: 14) {
-            ForEach(SetupModel.Step.allCases, id: \.self) { step in
+            ForEach(model.addingWorkspace ? [] : SetupModel.Step.allCases, id: \.self) { step in
                 SparkView(level: step == model.step ? .bright : step.rawValue < model.step.rawValue ? .brighter : .dimmed)
                     .help(["Welcome", "Slack", "ChatGPT", "Done"][step.rawValue])
             }
@@ -78,7 +78,7 @@ public struct SetupView: View {
 
     private func slack(_ palette: Palette) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            title("Connect Slack", palette)
+            title(model.addingWorkspace ? "Add a workspace" : "Connect Slack", palette)
             RichText(markdown: model.connected.isEmpty
                      ? "Splark reads your Slack through a **private app that only you install**, so there are no shared servers and no rate limits from a public app."
                      : "Add another workspace the same way, or continue.", size: 13.5)
@@ -94,8 +94,8 @@ public struct SetupView: View {
                 if model.slack == .connected {
                     WindowButton(title: "+ Add another workspace", kind: .ghost) { model.addAnother() }
                 }
-                WindowButton(title: "Back", kind: .secondary) { model.back() }
-                WindowButton(title: "Continue", enabled: model.canContinue) { model.next() }
+                if !model.addingWorkspace { WindowButton(title: "Back", kind: .secondary) { model.back() } }
+                WindowButton(title: model.addingWorkspace ? "Done" : "Continue", enabled: model.canContinue) { model.next() }
             }
         }
     }

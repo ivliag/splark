@@ -55,6 +55,12 @@ import SwiftUI
     /// An inbox holding the prototype's nine conversations: five that need you, four comments.
     public static func inbox() -> InboxStore {
         let store = InboxStore()
+        fill(store)
+        return store
+    }
+
+    /// Puts the prototype's conversations, with their summaries, into `store`.
+    public static func fill(_ store: InboxStore) {
         store.setWorkspaces(workspaces)
         var update = SyncUpdate()
         var results: [TriageResult] = []
@@ -70,7 +76,6 @@ import SwiftUI
         }
         store.apply(update)
         store.apply(results)
-        return store
     }
 
     public static func emptyInbox() -> InboxStore {
@@ -155,6 +160,7 @@ import SwiftUI
             ("setup-chatgpt", view { $0.preview(step: .chatgpt, connected: lumen) }),
             ("setup-chatgpt-done", view { $0.preview(step: .chatgpt, connected: lumen, chatgpt: .signedIn(ChatGPTAccount(email: "ivan@lumen.dev", canUsePlan: true))) }),
             ("setup-done", view { $0.preview(step: .done, connected: lumen) }),
+            ("setup-add-workspace", AnyView(SetupView(model: SetupModel(services: PreviewSetupServices(), addingWorkspace: true)))),
         ]
     }
 }
@@ -222,5 +228,26 @@ import SwiftUI
             ("settings-general-reset", view { $0.preview(section: .general, confirmingReset: true) }),
             ("settings-about", view { $0.preview(section: .about) }),
         ]
+    }
+}
+
+extension AppController {
+    /// For `SPLARK_DEBUG_PANEL` runs: no Keychain, a throwaway state with an app waiting for approval (so setup stays
+    /// closed), and no Slack. Call `showFixtures()` after `launch()`.
+    public static func withoutAccounts() -> AppController {
+        let secrets = InMemorySecretStore()
+        let state = StateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("splark-debug-\(UUID().uuidString)/state.json"))
+        var saved = SavedState()
+        saved.pendingApps = [SlackAppRegistration(appId: nil, clientId: "debug", redirectPort: 53682)]
+        try? state.save(saved)
+        let environment = EngineEnvironment(
+            secrets: secrets, state: state, slack: { _ in fatalError("debug runs have no workspaces") }, chatGPT: ChatGPTSession(store: secrets),
+            llm: nil, badges: nil, sync: SyncEngine.Config(), triage: Triage.Config(), now: { Date() }, open: { _ in true })
+        return AppController(environment: environment, loginItem: MainAppLoginItem(), statusButton: nil)
+    }
+
+    /// The prototype's conversations in the running engine's inbox.
+    public func showFixtures() {
+        Fixtures.fill(engine.inbox)
     }
 }

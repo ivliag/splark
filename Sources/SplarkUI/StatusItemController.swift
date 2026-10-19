@@ -24,9 +24,9 @@ import SplarkKit
     public enum ClickAction: Equatable { case togglePanel, showMenu }
 
     private let statusItem: NSStatusItem?
-    private let button: NSButton
+    let button: NSButton
     private let handlers: Handlers
-    private var summariesPaused = false
+    private(set) var summariesPaused = false
 
     /// The real menu-bar item.
     public convenience init(handlers: Handlers) {

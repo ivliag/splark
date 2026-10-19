@@ -40,6 +40,7 @@ import SplarkKit
     }
 
     public var step: Step = .welcome
+    public let addingWorkspace: Bool   // from Settings' "+ Add workspace": only the Slack step, then Done
     public var token = ""         // the pasted app configuration token
     public var manualToken = ""   // the fallback's user token
     public private(set) var slack: SlackState = .idle
@@ -53,7 +54,11 @@ import SplarkKit
     private var attempt = 0   // so an abandoned Allow can't change the state later
     private var allowTask: Task<SlackConnection, Error>?   // holds the app's redirect port while it waits
 
-    public init(services: SetupServices) { self.services = services }
+    public init(services: SetupServices, addingWorkspace: Bool = false) {
+        self.services = services
+        self.addingWorkspace = addingWorkspace
+        if addingWorkspace { step = .slack }
+    }
 
     public var canConnect: Bool {
         guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
@@ -75,7 +80,10 @@ import SplarkKit
         }
     }
 
-    public func next() { step = Step(rawValue: step.rawValue + 1) ?? .done }
+    public func next() {
+        if addingWorkspace { return services.finish() }
+        step = Step(rawValue: step.rawValue + 1) ?? .done
+    }
     public func back() { step = Step(rawValue: step.rawValue - 1) ?? .welcome }
 
     // MARK: Slack

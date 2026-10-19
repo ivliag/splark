@@ -239,3 +239,17 @@ import Testing
         #expect(services.log == ["login false", "count false", "finish"])
     }
 }
+
+@MainActor @Suite struct AddingAWorkspaceTests {
+    let services = FakeSetupServices()
+
+    @Test func addingAWorkspaceIsOnlyTheSlackStep() async {
+        let m = SetupModel(services: services, addingWorkspace: true)
+        #expect(m.step == .slack && m.addingWorkspace)
+        m.token = "xoxe.xoxp-config"
+        await m.connect()
+        #expect(m.canContinue)
+        m.next()
+        #expect(services.log == ["create xoxe.xoxp-config", "authorize 1.2", "added T1", "finish"])   // no switches: Settings has them
+    }
+}

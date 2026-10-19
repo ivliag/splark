@@ -1,35 +1,40 @@
 import AppKit
-import SplarkKit
+import SplarkUI
 
-/// Plan 1 shell: the spark in the menu bar (bright, with a placeholder count) and a Quit menu.
+/// Runs Splark's AppController, and lets it stop the engine before the app quits.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusItem: NSStatusItem!
+    private var controller: AppController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.imagePosition = .imageLeft
-        statusItem.button?.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-        show(level: .bright, count: 5)
-
-        let menu = NSMenu()
-        menu.addItem(withTitle: "Quit Splark", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        statusItem.menu = menu
-
-        if ProcessInfo.processInfo.environment["SPLARK_DEBUG_STATUS_ITEM"] != nil { reportStatusItem() }
+        NSApp.mainMenu = AppController.mainMenu()
+        if ProcessInfo.processInfo.environment["SPLARK_DEBUG_PANEL"] != nil {
+            controller = AppController.withoutAccounts()
+            controller.launch()
+            controller.showFixtures()
+            reportPanel()
+        } else {
+            controller = AppController()
+            controller.launch()
+        }
     }
 
-    func show(level: SparkLevel, count: Int?) {
-        statusItem.button?.image = PixelArt.image(PixelArt.spark, level: level, template: true)
-        statusItem.button?.title = count.map { " \($0)" } ?? ""
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        Task {
+            await controller.terminate()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
-    /// Prints the status item's on-screen frame, so it can be checked from a terminal
-    /// without screen-recording permission. Exits after printing.
-    private func reportStatusItem() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let window = self?.statusItem.button?.window else { print("status item: no window"); exit(1) }
-            print("status item: frame=\(window.frame) visible=\(window.isVisible) onScreen=\(window.occlusionState.contains(.visible))")
+    /// Opens the panel over the fixtures, prints where the spark and the panel are, and quits: a check from a
+    /// terminal, without screen-recording permission.
+    private func reportPanel() {
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            controller.togglePanel()
+            try? await Task.sleep(for: .seconds(1.5))
+            print(controller.debugReport())
             exit(0)
         }
     }
