@@ -77,6 +77,7 @@ extension SyncEngine {
         let update = await makeEngine(slack, clock).runUntilIdle()
         #expect(update.upserted[ItemKey(teamId: "T1", channelId: "D1")]?.unread.map(\.text) == ["-200", "-100"])
         #expect(update.upserted[ItemKey(teamId: "T1", channelId: "D1")]?.kind == .dm)
+        #expect(update.upserted[ItemKey(teamId: "T1", channelId: "D1")]?.moreUnread == false)   // older history isn't more unread
         #expect(!slack.calls.contains("conversations.history D2"))
     }
 
@@ -100,6 +101,15 @@ extension SyncEngine {
         clock.advance(61)
         #expect(await engine.runUntilIdle().isEmpty)
         #expect(slack.calls.filter { $0 == "conversations.history C1" }.count == 1)   // no second call for context
+    }
+
+    @Test func anEditedMessageShowsItsNewText() async {
+        let slack = channelWithSevenMessages(lastRead: ts(-500))
+        let engine = makeEngine(slack, clock)
+        _ = await engine.runUntilIdle()
+        slack.edit("C1", ts(-300), text: "m6, edited")
+        clock.advance(61)
+        #expect(await engine.runUntilIdle().upserted[c1]?.unread.map(\.text) == ["m5", "m6, edited"])
     }
 
     @Test func aMarkedReadConversationStaysHiddenUntilSomethingNewArrives() async {
@@ -191,6 +201,7 @@ extension SyncEngine {
         let engine = makeEngine(slack, clock)
         #expect(await engine.runUntilIdle().upserted[c1] != nil)
         #expect(await engine.status.missingScope)
+        #expect(await engine.status.progress.isComplete)   // the refused channel doesn't keep "Catching up…" showing
         slack.fail("conversations.info C1", with: URLError(.notConnectedToInternet))
         clock.advance(61)
         _ = await engine.runUntilIdle()
@@ -340,6 +351,14 @@ extension SyncEngine {
         let item = try #require(await makeEngine(slack, clock).runUntilIdle().upserted[thread])
         #expect(item.newestTs == ts(-6))
         #expect(item.unread.count == 46)
+    }
+
+    @Test func aThreadWithHundredsOfUnreadRepliesReachesTheNewest() async throws {
+        let slack = slackWithAThread(lastRead: ts(-3500))
+        for i in 0..<450 { slack.reply("C1", thread: parent, slackMessage(ts(-1900 + i), user: "U2", text: "r\(i)", threadTs: parent)) }
+        let item = try #require(await makeEngine(slack, clock).runUntilIdle().upserted[thread])
+        #expect(item.newestTs == ts(-60))
+        #expect(!item.moreUnread)
     }
 
     @Test func threadsWithNoItemYetAreClearedByATrustedClearBadge() async {

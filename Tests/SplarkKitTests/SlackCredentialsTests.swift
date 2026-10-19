@@ -147,6 +147,29 @@ import Testing
         #expect(stub.requests.map { $0.value(forHTTPHeaderField: "Authorization") } == ["Bearer xoxe.xoxp-a1", "Bearer xoxe.xoxp-a2"])
     }
 
+    @Test func manyCallsRejectedTogetherShareOneRefresh() async throws {
+        /// Answers token_expired to the old token and ok to the new one, whatever the order of calls.
+        final class ExpiringSlack: HTTPTransport, @unchecked Sendable {
+            func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+                let old = request.value(forHTTPHeaderField: "Authorization") == "Bearer xoxe.xoxp-a1"
+                let body = old ? #"{"ok":false,"error":"token_expired"}"# : #"{"ok":true,"user_id":"U1","team_id":"T1"}"#
+                return (Data(body.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+            }
+        }
+        let calls = Calls()
+        let manager = SlackTokenManager(credentials: creds(expiresIn: 7200), store: connected(creds(expiresIn: 7200)), refresher: { _, r in
+            calls.add(r)
+            try await Task.sleep(for: .milliseconds(30))
+            return refresh("xoxe.xoxp-a2", "xoxe-1-r2")
+        }, now: { start })
+        let client = SlackClient(tokens: manager, transport: ExpiringSlack(), sleeper: RecordingSleeper())
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<8 { group.addTask { _ = try await client.authTest() } }
+            try await group.waitForAll()
+        }
+        #expect(calls.all.count == 1)
+    }
+
     @Test func clientGivesUpWhenTheFreshTokenIsAlsoRejected() async {
         let expired = #"{"ok":false,"error":"token_expired"}"#
         let stub = StubTransport(json: expired, expired, expired)

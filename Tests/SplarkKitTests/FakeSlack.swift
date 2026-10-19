@@ -52,6 +52,16 @@ final class FakeSlack: SlackAPI, @unchecked Sendable {
         lock.withLock { threads["\(channel)/\(thread)", default: []].append(message) }
     }
 
+    /// Changes a top-level message's text, as an edit in Slack would.
+    func edit(_ channel: String, _ ts: String, text: String) {
+        lock.withLock {
+            guard let i = channels[channel]?.messages.firstIndex(where: { $0.ts == ts }), let m = channels[channel]?.messages[i] else { return }
+            channels[channel]?.messages[i] = SlackMessage(ts: m.ts, user: m.user, botId: m.botId, username: m.username, subtype: m.subtype, text: text,
+                                                          threadTs: m.threadTs, replyCount: m.replyCount, latestReply: m.latestReply,
+                                                          replyUsers: m.replyUsers, files: m.files, botProfile: m.botProfile)
+        }
+    }
+
     func setLastRead(_ channel: String, _ ts: String?, unreadCountDisplay: Int? = nil) {
         lock.withLock {
             channels[channel]?.lastRead = ts
@@ -120,7 +130,7 @@ final class FakeSlack: SlackAPI, @unchecked Sendable {
         if let oldest, SlackTS.isZero(oldest) { throw SlackError.api("invalid_ts_oldest") }   // as real Slack does (spike 1)
         return try lock.withLock {
             guard let c = channels[channel] else { throw SlackError.api("channel_not_found") }
-            let matching = c.messages.filter { m in
+            let matching = c.messages.sorted { SlackTS.isAfter($1.ts, $0.ts) }.filter { m in
                 (oldest.map { SlackTS.isAfter(m.ts, $0) } ?? true)
                     && (latest.map { inclusive ? !SlackTS.isAfter(m.ts, $0) : SlackTS.isAfter($0, m.ts) } ?? true)
             }
@@ -133,7 +143,8 @@ final class FakeSlack: SlackAPI, @unchecked Sendable {
         try await record("conversations.replies", channel)
         return try lock.withLock {
             guard let parent = channels[channel]?.messages.first(where: { $0.ts == ts }) else { throw SlackError.api("thread_not_found") }
-            let replies = (threads["\(channel)/\(ts)"] ?? []).filter { r in oldest.map { SlackTS.isAfter(r.ts, $0) } ?? true }
+            let replies = (threads["\(channel)/\(ts)"] ?? []).sorted { SlackTS.isAfter($1.ts, $0.ts) }   // oldest first, as Slack does
+                .filter { r in oldest.map { SlackTS.isAfter(r.ts, $0) } ?? true }
             return SlackHistory(messages: [parent] + replies.prefix(limit), hasMore: replies.count > limit, responseMetadata: nil)
         }
     }
