@@ -53,6 +53,7 @@ import SplarkKit
     private var app: SlackAppRegistration?
     private var attempt = 0   // so an abandoned Allow can't change the state later
     private var allowTask: Task<SlackConnection, Error>?   // holds the app's redirect port while it waits
+    private var signInTask: Task<ChatGPTAccount, Error>?   // waits for the browser
 
     public init(services: SetupServices, addingWorkspace: Bool = false) {
         self.services = services
@@ -92,14 +93,17 @@ import SplarkKit
     public func connect() async {
         let configToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !configToken.isEmpty else { return }
+        let mine = attempt
         slack = .creating
         do {
             app = try await services.createApp(configToken: configToken)
             token = ""
         } catch {
+            guard mine == attempt else { return }
             slack = .failed(Self.message(for: error))
             return
         }
+        guard mine == attempt else { return }   // cancelled while Slack created the app: don't open Allow now
         await allow()
     }
 
@@ -126,13 +130,15 @@ import SplarkKit
         }
     }
 
-    /// Stops waiting for Allow, freeing the redirect port: the window closed, or the user clicked Cancel.
+    /// Stops waiting for Allow (freeing the redirect port) or for ChatGPT's sign-in: the window closed, or the user
+    /// clicked Cancel. An app still being created won't open Allow when Slack answers.
     public func cancel() {
-        guard let allowTask else { return }
-        allowTask.cancel()
-        self.allowTask = nil
-        if slack == .waitingForAllow { slack = .allowFailed(Self.message(for: WorkspaceSetupError.cancelled)) }
         attempt += 1
+        allowTask?.cancel()
+        allowTask = nil
+        signInTask?.cancel()
+        if slack == .waitingForAllow { slack = .allowFailed(Self.message(for: WorkspaceSetupError.cancelled)) }
+        if slack == .creating { slack = .idle }
     }
 
     /// "My workspace needs admin approval": keep the app for Settings' Finish connecting, and carry on.
@@ -148,7 +154,13 @@ import SplarkKit
 
     public func addAnother() { slack = .idle }
 
-    public func showManual() { slack = .manual }
+    /// "Having trouble?": the pasted-token fallback. Stops waiting for Allow, freeing the redirect port.
+    public func showManual() {
+        attempt += 1
+        allowTask?.cancel()
+        allowTask = nil
+        slack = .manual
+    }
 
     public func openSlackAppSettings() { services.open(URL(string: "https://api.slack.com/apps")!) }
 
@@ -176,9 +188,14 @@ import SplarkKit
 
     public func signIn() async {
         chatgpt = .waiting
+        let task = Task { try await services.signInToChatGPT() }
+        signInTask = task
+        defer { signInTask = nil }
         do {
-            let account = try await services.signInToChatGPT()
+            let account = try await task.value
             chatgpt = account.canUsePlan ? .signedIn(account) : .failed(Self.notEligible)
+        } catch where task.isCancelled {
+            chatgpt = .idle
         } catch ChatGPTAuthError.denied {
             chatgpt = .failed("Sign-in was cancelled. Try again when you're ready.")
         } catch {

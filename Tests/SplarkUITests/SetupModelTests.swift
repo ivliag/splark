@@ -11,6 +11,8 @@ import Testing
     var authorizeGate: CheckedContinuation<Void, Never>?
     var holdAuthorize = false
     var holdUntilCancelled = false   // like the real Allow: waits on the redirect port until cancelled
+    var holdCreate = false, createGate: CheckedContinuation<Void, Never>?
+    var holdSignIn = false           // like the real sign-in: waits for the browser until cancelled
     let app = SlackAppRegistration(appId: "A9", clientId: "1.2", redirectPort: 53682)
 
     func connection(_ name: String, team: String) -> SlackConnection {
@@ -21,6 +23,7 @@ import Testing
 
     func createApp(configToken: String) async throws -> SlackAppRegistration {
         log.append("create \(configToken)")
+        if holdCreate { await withCheckedContinuation { createGate = $0 } }
         if let createError { throw createError }
         return app
     }
@@ -44,6 +47,12 @@ import Testing
     func waitingForApproval(_ app: SlackAppRegistration) async { log.append("pending \(app.clientId)") }
     func signInToChatGPT() async throws -> ChatGPTAccount {
         log.append("chatgpt")
+        if holdSignIn {
+            do { try await Task.sleep(for: .seconds(2)) } catch {
+                log.append("chatgpt cancelled")
+                throw error
+            }
+        }
         if let signInError { throw signInError }
         return account
     }
@@ -178,6 +187,42 @@ import Testing
         m.token = "xoxe.xoxp-config"
         await m.connect()
         #expect(m.doneMessage == "Splark is in your menu bar now and is catching up on 1 workspace.\nClick the spark to see what needs you.")
+    }
+
+    /// Closed while Slack creates the app: Allow mustn't open afterwards in a browser nobody is watching.
+    @Test func cancellingWhileCreatingTheAppDoesntOpenAllowLater() async throws {
+        services.holdCreate = true
+        let m = model()
+        m.token = "xoxe.xoxp-config"
+        let connecting = Task { await m.connect() }
+        try #require(await eventually { services.createGate != nil })
+        m.cancel()
+        services.createGate?.resume()
+        await connecting.value
+        #expect(!services.log.contains { $0.hasPrefix("authorize") })
+    }
+
+    @Test func havingTroubleStopsWaitingForAllow() async throws {
+        services.holdUntilCancelled = true
+        let m = model()
+        m.token = "xoxe.xoxp-config"
+        let connecting = Task { await m.connect() }
+        try #require(await eventually { services.log.last == "authorize 1.2" })
+        m.showManual()
+        await connecting.value
+        #expect(services.log.last == "authorize cancelled" && m.slack == .manual)
+    }
+
+    /// A closed ChatGPT tab mustn't leave setup waiting ten minutes: Cancel (or closing the window) stops waiting.
+    @Test func aChatGPTSignInCanBeCancelled() async throws {
+        services.holdSignIn = true
+        let m = model()
+        m.step = .chatgpt
+        let signingIn = Task { await m.signIn() }
+        try #require(await eventually { services.log.last == "chatgpt" })
+        m.cancel()
+        await signingIn.value
+        #expect(services.log.last == "chatgpt cancelled" && m.chatgpt == .idle)
     }
 
     @Test func anotherWorkspaceTheSameWay() async {

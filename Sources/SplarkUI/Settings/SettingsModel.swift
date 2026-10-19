@@ -99,6 +99,7 @@ public struct ChannelPicker: Equatable {
     private let now: () -> Date
     private let onReset: () -> Void
     private var allowTask: Task<Void, Error>?   // Reconnect or Finish connecting, holding the app's redirect port
+    private var signInTask: Task<Void, Error>?   // ChatGPT's sign-in, waiting for the browser
 
     public init(services: SettingsServices, now: @escaping () -> Date = Date.init, onReset: @escaping () -> Void = {}) {
         self.services = services
@@ -188,9 +189,11 @@ public struct ChannelPicker: Equatable {
         }
     }
 
-    /// Stops waiting for Allow, freeing the redirect port: the window closed, or the user clicked Cancel.
+    /// Stops waiting for Allow (freeing the redirect port) or for ChatGPT's sign-in: the window closed, or the user
+    /// clicked Cancel.
     public func cancel() {
         allowTask?.cancel()
+        signInTask?.cancel()
     }
 
     public func cancelPasting() {
@@ -256,11 +259,17 @@ public struct ChannelPicker: Equatable {
     public func signIn() async {
         message = nil
         signingIn = true
-        defer { signingIn = false }
+        let task = Task { [services] in try await services.signInToChatGPT() }
+        signInTask = task
+        defer {
+            signingIn = false
+            signInTask = nil
+        }
         do {
-            try await services.signInToChatGPT()
+            try await task.value
             account = await services.chatGPTAccount()
             models = await services.models()
+        } catch where task.isCancelled {
         } catch ChatGPTAuthError.denied {
             message = "Sign-in was cancelled. Try again when you're ready."
         } catch {

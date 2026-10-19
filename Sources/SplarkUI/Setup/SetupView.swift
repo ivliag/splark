@@ -223,7 +223,11 @@ public struct SetupView: View {
                     .font(Theme.font(11.5)).foregroundStyle(palette.tertiary).frame(maxWidth: .infinity).padding(.top, 7)
                 if case .failed(let message) = model.chatgpt { MessageBox(level: .bright, markdown: message).padding(.top, 10) }
             case .waiting:
-                WorkingLine(markdown: "Finish signing in in your browser…")
+                HStack {
+                    WorkingLine(markdown: "Finish signing in in your browser…")
+                    Spacer()
+                    Button("Cancel") { model.cancel() }.buttonStyle(.plain).font(Theme.font(11.5)).foregroundStyle(palette.tertiary)
+                }
             case .signedIn(let account):
                 HStack(spacing: 12) {
                     InitialTile(text: String((account.email ?? "?").prefix(1)), size: 34)

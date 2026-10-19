@@ -18,6 +18,7 @@ import Testing
     var reconnectGate: CheckedContinuation<Void, Never>?
     var holdReconnect = false
     var holdUntilCancelled = false
+    var holdSignIn = false
 
     func channels(teamId: String) async -> [ChannelOption] {
         [ChannelOption(id: "C1", title: "#eng", isPrivate: false), ChannelOption(id: "C2", title: "#random", isPrivate: false),
@@ -57,7 +58,16 @@ import Testing
         log.append("model \(model ?? "default")")
         settings.model = model
     }
-    func signInToChatGPT() async throws { log.append("sign in"); account = ChatGPTAccount(email: "ivan@lumen.dev", canUsePlan: true) }
+    func signInToChatGPT() async throws {
+        log.append("sign in")
+        if holdSignIn {
+            do { try await Task.sleep(for: .seconds(2)) } catch {
+                log.append("sign in cancelled")
+                throw error
+            }
+        }
+        account = ChatGPTAccount(email: "ivan@lumen.dev", canUsePlan: true)
+    }
     func signOutOfChatGPT() async throws { log.append("sign out"); account = nil }
     func setSummariesPaused(_ paused: Bool) async {
         log.append("pause \(paused)")
@@ -154,6 +164,16 @@ import Testing
         #expect(services.log == ["reconnect T1"] && m.working == "T1")
         m.cancel()
         await first.value
+    }
+
+    @Test func aChatGPTSignInCanBeCancelled() async throws {
+        services.holdSignIn = true
+        let m = model()
+        let signingIn = Task { await m.signIn() }
+        try #require(await eventually { services.log.last == "sign in" })
+        m.cancel()
+        await signingIn.value
+        #expect(services.log.last == "sign in cancelled" && !m.signingIn && m.message == nil)
     }
 
     @Test func aSignInSplarkCantReadSaysWhatToDo() async {

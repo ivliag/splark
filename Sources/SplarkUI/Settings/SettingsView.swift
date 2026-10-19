@@ -205,6 +205,7 @@ public struct SettingsView: View {
                     Spacer(minLength: 8)
                     if model.signingIn {
                         CyclingSpark().foregroundStyle(palette.spark)
+                        MiniButton(title: "Cancel") { model.cancel() }
                     } else if model.account == nil {
                         MiniButton(title: "Sign in with ChatGPT") { Task { await model.signIn() } }
                     } else {
