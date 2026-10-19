@@ -50,6 +50,14 @@ import Testing
         #expect(!state.settings.showCount && state.settings.openAtLogin && state.workspaces.isEmpty)
     }
 
+    @Test func deleteRemovesTheFile() throws {
+        let store = tempStore()
+        try store.save(sample)
+        try store.delete()
+        #expect(!FileManager.default.fileExists(atPath: store.url.path))
+        try store.delete()   // already gone: fine
+    }
+
     @Test func onlyTheUserCanReadIt() throws {
         let store = tempStore()
         try store.save(sample)

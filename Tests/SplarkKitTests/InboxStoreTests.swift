@@ -121,6 +121,12 @@ func result(_ snapshot: ConversationSnapshot, _ items: [(TriageLevel, String)]) 
         #expect(item.earlier == 4)
     }
 
+    @Test func clearEmptiesEverything() {
+        let s = store([dm, chatter])
+        s.clear()
+        #expect(s.items.isEmpty && s.summary.headline == "All caught up")
+    }
+
     @Test func aConversationCanHoldTwoItems() {
         let s = store([mention])
         s.apply([result(mention, [(.action, "Ship it"), (.question, "Final?")])])

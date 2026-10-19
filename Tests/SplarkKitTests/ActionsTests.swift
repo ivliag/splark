@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import SplarkKit
 
@@ -98,8 +99,7 @@ final class Opened: @unchecked Sendable {
     @Test func theUndoWindowClosesByItself() async throws {
         let (actions, inbox, _) = await setUp(undo: .milliseconds(20))
         actions.markRead([item(inbox, "D1")])
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(slack.calls.contains("conversations.mark D1"))
+        #expect(await eventually { slack.calls.contains("conversations.mark D1") })
     }
 
     @Test func aFailedMarkReadBringsTheItemBackAndSaysSo() async {
@@ -108,7 +108,21 @@ final class Opened: @unchecked Sendable {
         actions.markRead([item(inbox, "D1")])
         await actions.commitPendingReads()
         #expect(inbox.items.contains { $0.key.channelId == "D1" })
-        #expect(actions.lastFailure == ActionFailure(key: item(inbox, "D1").key, message: "Couldn't mark it as read. Try again."))
+        #expect(actions.lastFailure?.key == item(inbox, "D1").key)
+        #expect(actions.lastFailure?.message == "Couldn't mark it as read. Try again.")
+    }
+
+    /// The same failure twice in a row reaches the toast twice: setting an equal value again wouldn't tell observers.
+    @Test func theSameFailureTwiceIsReportedTwice() async {
+        let (actions, inbox, _) = await setUp()
+        slack.fail("conversations.mark", with: SlackError.api("not_in_channel"))
+        let reported = LockedBox(0)
+        for _ in 0..<2 {
+            withObservationTracking { _ = actions.lastFailure } onChange: { reported.withLock { $0 += 1 } }
+            actions.markRead([item(inbox, "D1")])
+            await actions.commitPendingReads()
+        }
+        #expect(reported.value == 2)
     }
 
     @Test func markingAThreadReadMovesOnlySplarksOwnLine() async {

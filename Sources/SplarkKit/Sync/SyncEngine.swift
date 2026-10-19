@@ -82,7 +82,8 @@ public actor SyncEngine {
     private let now: @Sendable () -> Date
     private var excluded: Set<String>
     private var schedule: SyncSchedule
-    private var inventory: [String: SlackConversation] = [:]
+    private var everything: [String: SlackConversation] = [:]   // every conversation the user is in, excluded or not
+    private var inventory: [String: SlackConversation] = [:]    // the ones Splark syncs
     private var inventoryDue = Date.distantPast
     private var readThrough: [String: String] = [:]   // marked read in Splark; Slack's last_read may lag behind
     private var sweepDue = Date.distantPast
@@ -178,9 +179,13 @@ public actor SyncEngine {
         if case .offline? = status.problem { status.problem = .offline(retryAt: now) }
     }
 
+    /// Every conversation the user is in, excluded ones included (for the exclusions picker).
+    public var conversations: [SlackConversation] { everything.values.sorted { $0.id < $1.id } }
+
+    /// Takes effect at once both ways: a channel no longer excluded is due straight away.
     public func setExcluded(_ ids: Set<String>) -> SyncUpdate {
         excluded = ids
-        inventory = inventory.filter { !ids.contains($0.key) }
+        inventory = everything.filter { !ids.contains($0.key) }
         schedule.setInventory(inventory.mapValues(\.kind), now: now())
         var update = SyncUpdate()
         for key in snapshots.keys where ids.contains(key.channelId) { update.merge(removing(key)) }
@@ -213,8 +218,9 @@ public actor SyncEngine {
     // MARK: Inventory and conversations (spec §6.3 steps 1, 2 and 6)
 
     private func takeInventory(now: Date) async throws -> SyncUpdate {
-        let all = try await slack.allConversations().filter { !excluded.contains($0.id) && $0.isArchived != true }
-        inventory = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let all = try await slack.allConversations().filter { $0.isArchived != true }
+        everything = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        inventory = everything.filter { !excluded.contains($0.key) }
         schedule.setInventory(inventory.mapValues(\.kind), now: now)
         inventoryDue = now.addingTimeInterval(config.inventoryInterval)
         inventoryLoaded = true

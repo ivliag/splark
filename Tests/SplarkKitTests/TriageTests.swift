@@ -147,6 +147,19 @@ func channelSnapshot(_ id: String, newest: Int = -60, kind: SnapshotKind = .chan
         #expect(await t.state == .idle)
     }
 
+    /// After Reset another ChatGPT account may sign in: the old one's usage limit doesn't carry over.
+    @Test func forgetAllForgetsAUsageLimit() async {
+        let until = clock.now.addingTimeInterval(3600)
+        let llm = FakeLLM { _ in throw LLMError.usageLimited(until: until) }
+        let t = triage(llm)
+        await t.update(update([channelSnapshot("C1")]))
+        clock.advance(20)
+        _ = await t.flushIfDue()
+        #expect(await t.state == .paused(.usageLimit(until: until)))
+        await t.forgetAll()
+        #expect(await t.state == .idle)
+    }
+
     @Test func signedOutWaitsForSignIn() async {
         let llm = FakeLLM { _ in throw LLMError.signedOut }
         let t = triage(llm)
@@ -263,4 +276,22 @@ final class HookLLM: LLMClient, @unchecked Sendable {
 
 extension FakeLLM {
     func answerSync(_ request: LLMRequest) throws -> String { try answer(request) }
+}
+
+@Suite struct TriageSignOutTests {
+    @Test func signingOutPausesAtOnce() async {
+        let t = Triage(llm: FakeLLM.everything(.fyi), now: { Date(timeIntervalSince1970: 0) })
+        await t.signedOut()
+        #expect(await t.state == .paused(.signedOut))
+        await t.resume()
+        #expect(await t.state == .idle)
+    }
+
+    @Test func forgetAllDropsEverythingWaiting() async {
+        let t = Triage(llm: FakeLLM.everything(.fyi), now: { Date(timeIntervalSince1970: 0) })
+        await t.update(update([channelSnapshot("C1")]))
+        await t.forgetAll()
+        #expect(await t.waitingCount == 0)
+        #expect(await t.nextFlush == nil)
+    }
 }

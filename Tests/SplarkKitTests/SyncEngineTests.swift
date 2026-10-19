@@ -447,3 +447,19 @@ extension SyncEngine {
         #expect(await engine.step().didWork)
     }
 }
+
+@Suite struct SyncEngineInventoryTests {
+    let clock = ManualClock()
+
+    @Test func aChannelComesBackAtOnceWhenNoLongerExcluded() async {
+        let slack = FakeSlack()
+        slack.addChannel("C1", kind: .publicChannel, name: "eng", lastRead: ts(-100))
+        slack.addChannel("C2", kind: .publicChannel, name: "random", lastRead: ts(-100))
+        slack.post("C2", slackMessage(ts(-50), user: "U2", text: "hi"))
+        let engine = makeEngine(slack, clock, excluded: ["C2"])
+        _ = await engine.runUntilIdle()
+        #expect(await engine.conversations.map(\.id) == ["C1", "C2"])   // everything the user is in, excluded or not
+        _ = await engine.setExcluded([])
+        #expect(await engine.runUntilIdle().upserted.keys.map(\.channelId) == ["C2"])   // no wait for the next inventory
+    }
+}

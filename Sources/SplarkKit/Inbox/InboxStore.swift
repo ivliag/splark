@@ -114,6 +114,16 @@ public final class InboxStore {
         rebuild()
     }
 
+    /// Reset Splark: nothing left to show.
+    public func clear() {
+        snapshots = [:]
+        results = [:]
+        hidden = [:]
+        repliedAt = [:]
+        reactions = [:]
+        rebuild()
+    }
+
     // MARK: Optimistic states for Actions
 
     public func hide(_ key: ItemKey, through ts: String) {

@@ -19,8 +19,9 @@ public enum ActionError: Error, Equatable {
     case slack(String)
 }
 
-/// Shown as a toast (spec §9).
+/// Shown as a toast (spec §9). Each failure is its own value, so the same one twice still reaches the toast.
 public struct ActionFailure: Sendable, Equatable {
+    public let id = UUID()
     public let key: ItemKey
     public let message: String
 }

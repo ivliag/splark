@@ -41,6 +41,30 @@ public struct EngineEnvironment: Sendable {
     }
 }
 
+/// A channel for the exclusions picker (spec §4.5).
+public struct ChannelOption: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let title: String   // "#eng"
+    public let isPrivate: Bool
+
+    public init(id: String, title: String, isPrivate: Bool) {
+        self.id = id
+        self.title = title
+        self.isPrivate = isPrivate
+    }
+}
+
+/// The signed-in ChatGPT account, for setup and Settings.
+public struct ChatGPTAccount: Sendable, Equatable {
+    public let email: String?
+    public let canUsePlan: Bool
+
+    public init(email: String?, canUsePlan: Bool) {
+        self.email = email
+        self.canUsePlan = canUsePlan
+    }
+}
+
 /// Sleeps until a time, or until poked, whichever comes first.
 @MainActor final class Wakeup {
     private var continuation: CheckedContinuation<Void, Never>?
@@ -116,6 +140,7 @@ public final class SplarkEngine {
     public private(set) var syncStatus: [String: SyncStatus] = [:]
     public private(set) var triageState: TriageState = .idle
     public private(set) var isRunning = false
+    public private(set) var badge: SlackBadge?   // nil: Slack isn't running, or its badge can't be read
     public var workspaces: [Workspace] { state.workspaces }
     public var pendingApps: [SlackAppRegistration] { state.pendingApps }
     public var settings: SavedState.Settings { state.settings }
@@ -154,8 +179,8 @@ public final class SplarkEngine {
         for workspace in state.workspaces { launch(workspace) }
         triageLoop = Task { [weak self] in await self?.runTriage() }
         saveLoop = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
+            // A cancelled sleep throws: stop here, rather than save once more after stop() (or reset()) is done.
+            while (try? await Task.sleep(for: .seconds(60))) != nil {
                 await self?.save()
             }
         }
@@ -197,6 +222,7 @@ public final class SplarkEngine {
 
     /// From the badge watcher (public for tests).
     public func badgeChanged(_ badge: SlackBadge?) async {
+        self.badge = badge
         for running in registry.running.values {
             await apply(await running.engine.badgeChanged(badge))
             running.wakeup.poke()
@@ -230,10 +256,33 @@ public final class SplarkEngine {
         await save()
     }
 
+    public func removePendingApp(_ app: SlackAppRegistration) async {
+        state.pendingApps.removeAll { $0 == app }
+        await save()
+    }
+
+    /// What "Reconnect" re-authorises: the workspace's private app. Nil for a pasted token, which has no app.
+    public func registration(for teamId: String) -> SlackAppRegistration? {
+        guard let workspace = state.workspaces.first(where: { $0.teamId == teamId }), let port = workspace.redirectPort,
+              let clientId = (try? SlackCredentials.load(teamId: teamId, from: environment.secrets)).flatMap({ $0 })?.clientId else { return nil }
+        return SlackAppRegistration(appId: workspace.appId, clientId: clientId, redirectPort: port)
+    }
+
+    /// Every channel the user is in (excluded ones too), sorted by name. Empty until the first inventory.
+    public func channels(teamId: String) async -> [ChannelOption] {
+        guard let running = registry.running[teamId] else { return [] }
+        return await running.engine.conversations
+            .filter { $0.kind == .publicChannel || $0.kind == .privateChannel }
+            .map { ChannelOption(id: $0.id, title: "#" + ($0.name ?? $0.id), isPrivate: $0.kind == .privateChannel) }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    public func excludedChannels(teamId: String) -> Set<String> { Set(state.excludedChannels[teamId] ?? []) }
+
     /// Settings → Remove: forgets the token and everything Splark kept about the workspace.
+    /// The workspace goes even when its Keychain item won't; the error then says so.
     public func disconnect(teamId: String) async throws {
         await halt(teamId)
-        try environment.secrets.delete(SlackCredentials.key(teamId: teamId))
         state.workspaces.removeAll { $0.teamId == teamId }
         state.sync[teamId] = nil
         state.userNames[teamId] = nil
@@ -241,6 +290,7 @@ public final class SplarkEngine {
         syncStatus[teamId] = nil
         inbox.setWorkspaces(state.workspaces)
         await save()
+        try environment.secrets.delete(SlackCredentials.key(teamId: teamId))
     }
 
     public func setExcluded(_ channels: Set<String>, teamId: String) async {
@@ -281,6 +331,40 @@ public final class SplarkEngine {
 
     public func signOutOfChatGPT() async throws {
         try await environment.chatGPT.signOut()
+        await chatGPTClient?.forgetModels()
+        await triage.signedOut()
+        triageState = await triage.state
+    }
+
+    public func chatGPTAccount() async -> ChatGPTAccount? {
+        await environment.chatGPT.credentials.map { ChatGPTAccount(email: $0.email, canUsePlan: $0.canUsePlan) }
+    }
+
+    /// The plan's models, for Settings' model picker. Empty when summaries come from another LLM client.
+    public func availableModels() async throws -> [String] {
+        try await chatGPTClient?.models() ?? []
+    }
+
+    /// Settings → Reset Splark: stops, then forgets every token, setting and summary. The app shows setup again.
+    /// Everything in memory is forgotten even if a Keychain item or the file won't go; the first such error is thrown after.
+    public func reset() async throws {
+        await stop()
+        var failure: Error?
+        func attempt(_ body: () throws -> Void) {
+            do { try body() } catch { failure = failure ?? error }
+        }
+        for workspace in state.workspaces { attempt { try environment.secrets.delete(SlackCredentials.key(teamId: workspace.teamId)) } }
+        do { try await environment.chatGPT.signOut() } catch { failure = failure ?? error }
+        attempt { try environment.secrets.delete(ChatGPTSession.hostKey) }
+        attempt { try environment.state.delete() }
+        await triage.forgetAll()
+        await chatGPTClient?.setModel(nil)
+        await chatGPTClient?.forgetModels()
+        state = SavedState()
+        syncStatus = [:]
+        inbox.clear()
+        inbox.setWorkspaces([])
+        if let failure { throw failure }
     }
 
     // MARK: Loops

@@ -78,6 +78,22 @@ public actor Triage {
     /// Settings → Pause summaries.
     public func setPaused(_ paused: Bool) { userPaused = paused }
 
+    /// Signed out of ChatGPT: hold everything until `resume()`.
+    public func signedOut() { accountPause = .signedOut }
+
+    /// Reset Splark: forget every conversation, summary and anything waiting, and the old account's limits and retries.
+    public func forgetAll() {
+        snapshots = [:]
+        cache = [:]
+        dirty = []
+        firstDirty = nil
+        lastDirty = nil
+        requestTimes = []
+        usageLimitedUntil = nil
+        retryAt = nil
+        failures = 0
+    }
+
     /// After signing in again.
     public func resume() {
         accountPause = nil
