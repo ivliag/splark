@@ -14,6 +14,14 @@ public struct SyncStatus: Sendable, Equatable {
     public var missingScope = false   // "Reconnect to grant new permissions"; syncing goes on, so it outlives other problems
     public var progress = SyncSchedule.Progress(checked: 0, total: 0)   // "Catching up… 120 of 300 conversations"
     public var lastSuccess: Date?
+
+    public init(problem: SyncProblem? = nil, missingScope: Bool = false, progress: SyncSchedule.Progress = .init(checked: 0, total: 0),
+                lastSuccess: Date? = nil) {
+        self.problem = problem
+        self.missingScope = missingScope
+        self.progress = progress
+        self.lastSuccess = lastSuccess
+    }
 }
 
 /// Snapshots that appeared or changed, and ones that went away.

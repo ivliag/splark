@@ -40,7 +40,7 @@ struct MiniButton: View {
     var body: some View {
         let palette = Palette(scheme)
         Button(action: action) {
-            Text(title).font(Theme.font(12, .medium)).foregroundStyle(palette.text)
+            Text(title).font(Theme.font(12, .medium)).foregroundStyle(palette.text).lineLimit(1).fixedSize()
                 .padding(EdgeInsets(top: 4, leading: 9, bottom: 4, trailing: 9))
                 .background(RoundedRectangle(cornerRadius: 7).fill(palette.chip))
         }
@@ -174,6 +174,7 @@ struct AppIconView: View {
 struct TokenField: View {
     let placeholder: String
     @Binding var text: String
+    var monospaced = true
     var onSubmit: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
     @Environment(\.isSnapshot) private var isSnapshot
@@ -191,7 +192,7 @@ struct TokenField: View {
                     .onSubmit(onSubmit)
             }
         }
-        .font(.system(size: 12.5, design: .monospaced))
+        .font(monospaced ? .system(size: 12.5, design: .monospaced) : Theme.font(12.5))
         .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
         .background(RoundedRectangle(cornerRadius: 9).fill(palette.field))
         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(palette.fieldBorder, lineWidth: 1))

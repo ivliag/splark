@@ -158,3 +158,69 @@ import SwiftUI
         ]
     }
 }
+
+/// Settings' services for previews and renders: the fixture workspaces, one needing a new token, and an app waiting for approval.
+@MainActor final class PreviewSettingsServices: SettingsServices {
+    var workspaces: [Workspace] {
+        Fixtures.workspaces + [Workspace(teamId: "T3", name: "Acme Partners", userId: "U3", userName: "ivan", url: nil, redirectPort: nil, appId: nil)]
+    }
+    let pendingApps = [SlackAppRegistration(appId: "A4", clientId: "4.4", redirectPort: 53684)]
+    var syncStatus: [String: SyncStatus] {
+        ["T1": SyncStatus(lastSuccess: Fixtures.now.addingTimeInterval(-60)),
+         "T2": SyncStatus(lastSuccess: Fixtures.now.addingTimeInterval(-240)),
+         "T3": SyncStatus(problem: .reauthorize, lastSuccess: Fixtures.now.addingTimeInterval(-3 * 3600))]
+    }
+    let badge: SlackBadge? = .count(3)
+    var settings: SavedState.Settings { SavedState.Settings() }
+    func channels(teamId: String) async -> [ChannelOption] { [] }
+    func excludedChannels(teamId: String) -> Set<String> { [] }
+    func setExcluded(_ channels: Set<String>, teamId: String) async {}
+    func reconnect(teamId: String) async throws {}
+    func finishConnecting(_ app: SlackAppRegistration) async throws {}
+    func connect(userToken: String) async throws -> SlackConnection { throw WorkspaceSetupError.cancelled }
+    func added(_ connection: SlackConnection) async throws {}
+    func remove(teamId: String) async throws {}
+    func removePending(_ app: SlackAppRegistration) async {}
+    func addWorkspace() {}
+    func chatGPTAccount() async -> ChatGPTAccount? { nil }
+    func models() async -> [String] { [] }
+    func setModel(_ model: String?) async {}
+    func signInToChatGPT() async throws {}
+    func signOutOfChatGPT() async throws {}
+    func setSummariesPaused(_ paused: Bool) async {}
+    func setOpenAtLogin(_ on: Bool) throws {}
+    func setShowCount(_ on: Bool) async {}
+    func reset() async throws {}
+    func open(_ url: URL) {}
+}
+
+/// Every Settings section and state worth looking at.
+@MainActor public enum SettingsGallery {
+    public static func states() -> [(name: String, view: AnyView)] {
+        func view(_ configure: (SettingsModel) -> Void) -> AnyView {
+            let model = SettingsModel(services: PreviewSettingsServices(), now: { Fixtures.now })
+            configure(model)
+            return AnyView(SettingsView(model: model))
+        }
+        let account = ChatGPTAccount(email: "ivan@lumen.dev", canUsePlan: true)
+        let models = ["gpt-5.6-luna", "gpt-6-luna", "gpt-6-mini"]
+        let channels = [ChannelOption(id: "C1", title: "#announcements", isPrivate: false), ChannelOption(id: "C2", title: "#eng", isPrivate: false),
+                        ChannelOption(id: "C3", title: "#incidents", isPrivate: false), ChannelOption(id: "G1", title: "#leads", isPrivate: true),
+                        ChannelOption(id: "C4", title: "#random", isPrivate: false), ChannelOption(id: "C5", title: "#social", isPrivate: false)]
+        return [
+            ("settings-workspaces", view { $0.preview(section: .workspaces) }),
+            ("settings-workspaces-allow", view { $0.preview(section: .workspaces, message: SetupModel.message(for: WorkspaceSetupError.timedOut), working: "T1") }),
+            ("settings-workspaces-paste", view { $0.preview(section: .workspaces, pasting: "T3"); $0.newToken = "xoxp-2026…" }),
+            ("settings-workspaces-remove", view { $0.preview(section: .workspaces, removal: $0.workspaceRows[1]) }),
+            ("settings-channels", view {
+                $0.preview(section: .workspaces)
+                $0.channelPicker = ChannelPicker(teamId: "T1", name: "Lumen", channels: channels, excluded: ["C4", "C5"])
+            }),
+            ("settings-chatgpt", view { $0.preview(section: .chatgpt, account: account, models: models) }),
+            ("settings-chatgpt-signed-out", view { $0.preview(section: .chatgpt) }),
+            ("settings-general", view { $0.preview(section: .general) }),
+            ("settings-general-reset", view { $0.preview(section: .general, confirmingReset: true) }),
+            ("settings-about", view { $0.preview(section: .about) }),
+        ]
+    }
+}
