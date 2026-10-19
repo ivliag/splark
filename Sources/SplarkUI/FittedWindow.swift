@@ -31,10 +31,14 @@ import SwiftUI
 
     public var isVisible: Bool { window.isVisible }
 
+    /// Brings the window in front of every app's. A click on the spark doesn't make Splark the active app, and since
+    /// macOS 14 asking to activate is cooperative and may be declined: without ordering it front regardless, the window
+    /// stayed behind the frontmost app and the click seemed to do nothing.
     public func show() {
         if !window.isVisible { window.center() }
+        window.orderFrontRegardless()
         NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
+        window.makeKey()
     }
 
     public func close() { window.close() }

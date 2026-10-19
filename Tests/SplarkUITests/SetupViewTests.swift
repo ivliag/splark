@@ -39,4 +39,21 @@ import Testing
         await connecting.value
         #expect(services.log.last == "authorize cancelled")
     }
+
+    /// A click on the spark doesn't make Splark the active app, and macOS 14's cooperative activation may not either:
+    /// the setup window stayed behind the frontmost app and the click seemed to do nothing (live run). Shown, it's in
+    /// front of every app's windows.
+    @Test func shownTheWindowIsInFrontOfOtherApps() async throws {
+        _ = NSApplication.shared
+        let controller = SetupWindowController(model: SetupModel(services: PreviewSetupServices()))
+        controller.show()
+        defer { controller.close() }
+        try await Task.sleep(for: .milliseconds(200))
+        // Front to back, only this process's windows (other tests' too) may come before it.
+        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? [])
+            .filter { ($0[kCGWindowLayer as String] as? Int) == 0 }
+        let index = try #require(windows.firstIndex { ($0[kCGWindowNumber as String] as? Int) == controller.window.windowNumber })
+        let ahead = windows[..<index].compactMap { $0[kCGWindowOwnerPID as String] as? Int32 }
+        #expect(ahead.allSatisfy { $0 == getpid() })
+    }
 }
