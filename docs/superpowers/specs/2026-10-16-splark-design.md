@@ -154,16 +154,16 @@ A single window with four steps, shown as four pixel dots in the title bar (soli
 
 ### 4.5 Settings
 
-One small window with four sections, as tabs in its title bar, in setup's look.
+One small window with four sections, as tabs in its title bar in this order: About, General, Slack, OpenAI. It opens on General. It has setup's look.
 
-- **Workspaces:**
-  - A list with status (Connected / Waiting for approval / Token revoked) and the last sync time. One line below the list says whether Slack's Dock badge can be read: it belongs to the Slack app, not to a workspace.
+- **About:** version, licence, a link to the repo, and credits (Doll).
+- **General:** Open at login, Show count, and Reset Splark (clears all data).
+- **Slack:**
+  - The workspaces, with status (Connected / Waiting for approval / Token revoked) and the last sync time. One line below the list says whether Slack's Dock badge can be read: it belongs to the Slack app, not to a workspace.
   - Add (setup's Slack step on its own), Finish connecting, Reconnect, and Remove (which deletes the token from Keychain and tells the user how to delete the private Slack app). Remove and Reset ask first, inline.
   - A workspace connected with a pasted token has no app to Allow again: when its token stops working, it offers "Paste new token" instead of Reconnect.
   - Per-workspace muted channels (a picker): the same list the panel's Mute adds to.
-- **ChatGPT:** the account and plan, a model picker (from `GET /v1/models`, with a recommended default), Sign out, and Pause summaries.
-- **General:** Open at login, Show count, and Reset Splark (clears all data).
-- **About:** version, licence, a link to the repo, and credits (Doll).
+- **OpenAI:** the ChatGPT account and plan, a model picker (from `GET /v1/models`, with a recommended default), Sign out, and Pause summaries.
 
 ## 5. Architecture
 

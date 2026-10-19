@@ -17,8 +17,8 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if let message = model.message { MessageBox(level: .bright, markdown: message) }
                 switch model.section {
-                case .workspaces: if model.channelPicker != nil { channels(palette) } else { workspaces(palette) }
-                case .chatgpt: chatgpt(palette)
+                case .slack: if model.channelPicker != nil { channels(palette) } else { workspaces(palette) }
+                case .openAI: chatgpt(palette)
                 case .general: general(palette)
                 case .about: about(palette)
                 }

@@ -21,7 +21,7 @@ import Testing
         let model = SettingsModel(services: PreviewSettingsServices())
         let controller = SettingsWindowController(model: model)
         #expect(controller.window.title == "Splark Settings" && controller.window.titlebarAppearsTransparent)
-        #expect(!controller.isVisible && model.section == .workspaces)
+        #expect(!controller.isVisible && model.section == .general)
     }
 
     /// A shown window resizes to each section, keeping its top edge. (Sized by its hosting controller, it looped and crashed on macOS 26.)
@@ -30,10 +30,10 @@ import Testing
         let model = SettingsModel(services: PreviewSettingsServices(), now: { now })
         let controller = SettingsWindowController(model: model)
         controller.show()
-        #expect(await eventually { controller.window.frame.height > 300 })   // Workspaces, with four rows
+        #expect(await eventually { controller.window.frame.height > 150 })   // General, where Settings opens
         let top = controller.window.frame.maxY
         var height = controller.window.frame.height
-        for section in [SettingsModel.Section.about, .general, .workspaces] {
+        for section in [SettingsModel.Section.about, .slack, .general] {
             model.section = section
             #expect(await eventually { abs(controller.window.frame.height - height) > 1 }, "\(section)")
             #expect(abs(controller.window.frame.maxY - top) < 1, "\(section)")

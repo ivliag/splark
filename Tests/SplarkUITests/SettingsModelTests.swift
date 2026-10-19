@@ -93,6 +93,12 @@ import Testing
     let services = FakeSettingsServices()
     func model() -> SettingsModel { SettingsModel(services: services, now: { now }) }
 
+    /// Ivan's order from the live run. Settings opens on General.
+    @Test func theTabsAreAboutGeneralSlackOpenAI() {
+        #expect(SettingsModel.Section.allCases.map(\.rawValue) == ["About", "General", "Slack", "OpenAI"])
+        #expect(model().section == .general)
+    }
+
     @Test func listsWorkspacesWithTheirStatusAndPendingOnes() {
         var synced = SyncStatus()
         synced.lastSuccess = ago(120)

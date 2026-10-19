@@ -214,16 +214,16 @@ import SwiftUI
                         ChannelOption(id: "C3", title: "#incidents", isPrivate: false), ChannelOption(id: "G1", title: "#leads", isPrivate: true),
                         ChannelOption(id: "C4", title: "#random", isPrivate: false), ChannelOption(id: "C5", title: "#social", isPrivate: false)]
         return [
-            ("settings-workspaces", view { $0.preview(section: .workspaces) }),
-            ("settings-workspaces-allow", view { $0.preview(section: .workspaces, message: SetupModel.message(for: WorkspaceSetupError.timedOut), working: "T1") }),
-            ("settings-workspaces-paste", view { $0.preview(section: .workspaces, pasting: "T3"); $0.newToken = "xoxp-2026…" }),
-            ("settings-workspaces-remove", view { $0.preview(section: .workspaces, removal: $0.workspaceRows[1]) }),
-            ("settings-channels", view {
-                $0.preview(section: .workspaces)
+            ("settings-slack", view { $0.preview(section: .slack) }),
+            ("settings-slack-allow", view { $0.preview(section: .slack, message: SetupModel.message(for: WorkspaceSetupError.timedOut), working: "T1") }),
+            ("settings-slack-paste", view { $0.preview(section: .slack, pasting: "T3"); $0.newToken = "xoxp-2026…" }),
+            ("settings-slack-remove", view { $0.preview(section: .slack, removal: $0.workspaceRows[1]) }),
+            ("settings-slack-channels", view {
+                $0.preview(section: .slack)
                 $0.channelPicker = ChannelPicker(teamId: "T1", name: "Lumen", channels: channels, excluded: ["C4", "C5"])
             }),
-            ("settings-chatgpt", view { $0.preview(section: .chatgpt, account: account, models: models) }),
-            ("settings-chatgpt-signed-out", view { $0.preview(section: .chatgpt) }),
+            ("settings-openai", view { $0.preview(section: .openAI, account: account, models: models) }),
+            ("settings-openai-signed-out", view { $0.preview(section: .openAI) }),
             ("settings-general", view { $0.preview(section: .general) }),
             ("settings-general-reset", view { $0.preview(section: .general, confirmingReset: true) }),
             ("settings-about", view { $0.preview(section: .about) }),

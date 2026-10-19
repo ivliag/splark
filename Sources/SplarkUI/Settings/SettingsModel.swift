@@ -74,9 +74,10 @@ public struct ChannelPicker: Equatable {
 
 /// Settings (spec §4.5): workspaces, ChatGPT, general switches and about.
 @MainActor @Observable public final class SettingsModel {
-    public enum Section: String, CaseIterable { case workspaces = "Workspaces", chatgpt = "ChatGPT", general = "General", about = "About" }
+    /// The tabs, in order. Slack holds the workspaces; OpenAI holds the ChatGPT account and summaries.
+    public enum Section: String, CaseIterable { case about = "About", general = "General", slack = "Slack", openAI = "OpenAI" }
 
-    public var section: Section = .workspaces
+    public var section: Section = .general
     public private(set) var message: String?           // the last thing that went wrong, shown at the top
     public private(set) var working: String?           // the row waiting for Allow
     public private(set) var pasting: String?           // the row showing a token field

@@ -44,13 +44,14 @@ Go through this on a real Mac before tagging a release: macOS 26 for Liquid Glas
 
 ## Settings
 
-- [ ] **Workspaces:** each shows "Connected · Synced Xm ago". The line under the list says whether Slack is open.
+- [ ] Settings opens on **General**; the tabs read About, General, Slack, OpenAI.
+- [ ] **About:** the version matches the release, and both links open.
+- [ ] **General:** Open at login on: macOS lists Splark in System Settings → General → Login Items. Show count off: the number goes, the spark stays.
+- [ ] **Slack:** each workspace shows "Connected · Synced Xm ago". The line under the list says whether Slack is open.
 - [ ] **Channels…** lists your channels; search filters them. Mute one, **Save**: its items leave the panel. Unmute it: they come back.
 - [ ] **+ Add workspace** opens "Add a workspace": connecting works the same way as in setup, and **Done** closes it.
 - [ ] **Remove** asks first and mentions api.slack.com/apps. Removing takes the workspace's items out of the panel.
-- [ ] **ChatGPT:** the account shows. The model menu lists the plan's models with the recommended one; choosing one sticks after a restart. **Pause summaries** shows "Summaries paused" in the panel. **Sign out** turns summaries off ("Summaries paused: sign in again"); **Sign in with ChatGPT** brings them back.
-- [ ] **General:** Open at login on: macOS lists Splark in System Settings → General → Login Items. Show count off: the number goes, the spark stays.
-- [ ] **About:** the version matches the release, and both links open.
+- [ ] **OpenAI:** the account shows. The model menu lists the plan's models with the recommended one; choosing one sticks after a restart. **Pause summaries** shows "Summaries paused" in the panel. **Sign out** turns summaries off ("Summaries paused: sign in again"); **Sign in with ChatGPT** brings them back.
 - [ ] **Reset Splark** asks first, then the setup window opens and the panel is empty.
 - [ ] ⌘W closes Settings and setup; ⌘V, ⌘C and ⌘A work in their fields.
 

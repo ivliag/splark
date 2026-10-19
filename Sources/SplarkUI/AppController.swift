@@ -88,7 +88,7 @@ import SwiftUI
         window.show()
     }
 
-    public func showSettings(_ section: SettingsModel.Section = .workspaces) {
+    public func showSettings(_ section: SettingsModel.Section = .general) {
         panel.close()
         if settings == nil {
             let services = LiveSettingsServices(engine: engine, loginItem: loginItem, onAddWorkspace: { [weak self] in self?.showSetup(addingWorkspace: true) })
