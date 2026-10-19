@@ -16,6 +16,7 @@ usage: splark-dev <command>
   chatgpt-probe [--model M]           list models and send a tiny structured request
   inbox [--minutes N] [--no-text]     run the whole engine against your Slack and ChatGPT, printing the inbox
   triage-eval [--model M]             score the triage evaluation set against your ChatGPT plan
+  make-icon OUT.icns                  render the app icon at every size and pack it with iconutil
 """
 
 do {
@@ -30,6 +31,7 @@ do {
     case "chatgpt-probe": try await chatgptProbeCommand()
     case "inbox": try await inboxCommand()
     case "triage-eval": try await triageEvalCommand()
+    case "make-icon": try makeIconCommand()
     default: print(usage)
     }
 } catch {

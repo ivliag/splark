@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Builds Splark.app into build/ from the SwiftPM "Splark" product and ad-hoc signs it.
+# Builds Splark.app into build/ from the SwiftPM "Splark" product, with its icon rendered from PixelArt, and ad-hoc signs it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG="${1:-release}"
 swift build -c "$CONFIG" --product Splark
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/Splark"
+swift build -c "$CONFIG" --product splark-dev
+BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
 APP="build/Splark.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Splark"
+cp "$BIN_DIR/Splark" "$APP/Contents/MacOS/Splark"
 cp Support/Info.plist "$APP/Contents/Info.plist"
-if [ -f Support/AppIcon.icns ]; then
-  cp Support/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-  /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist"
-fi
+"$BIN_DIR/splark-dev" make-icon "$APP/Contents/Resources/AppIcon.icns" > /dev/null
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist"
 codesign --force --options runtime --sign - "$APP"
 echo "$APP"
