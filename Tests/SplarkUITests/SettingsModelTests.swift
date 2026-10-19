@@ -129,7 +129,7 @@ import Testing
         services.holdReconnect = true
         let m = model()
         let reconnecting = Task { await m.perform(.reconnect, on: m.workspaceRows[0]) }
-        #expect(await eventually { services.reconnectGate != nil })
+        try #require(await eventually { services.reconnectGate != nil })
         #expect(m.working == "T1")
         services.reconnectError = WorkspaceSetupError.cancelled
         services.reconnectGate?.resume()

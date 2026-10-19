@@ -91,7 +91,7 @@ import Testing
         let m = model()
         m.token = "xoxe.xoxp-config"
         let connecting = Task { await m.connect() }
-        #expect(await eventually { services.authorizeGate != nil })
+        try #require(await eventually { services.authorizeGate != nil })
         #expect(m.slack == .waitingForAllow)
         services.authorizeGate?.resume()
         await connecting.value
@@ -134,7 +134,7 @@ import Testing
         let m = model()
         m.token = "xoxe.xoxp-config"
         let connecting = Task { await m.connect() }
-        #expect(await eventually { services.authorizeGate != nil })
+        try #require(await eventually { services.authorizeGate != nil })
         await m.needsApproval()
         #expect(m.slack == .waitingForApproval && m.canContinue)
         #expect(services.log.last == "pending 1.2")
@@ -173,7 +173,7 @@ import Testing
         let m = model()
         m.token = "xoxe.xoxp-config"
         let connecting = Task { await m.connect() }
-        #expect(await eventually { services.authorizeGate != nil })
+        try #require(await eventually { services.authorizeGate != nil })
         await m.needsApproval()
         services.authorizeGate?.resume()
         await connecting.value

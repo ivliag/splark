@@ -29,8 +29,8 @@ Splark needs macOS 14 or later. Summaries need a ChatGPT Plus or Pro plan; witho
 
 - **Slack:** Splark talks only to `slack.com`, through your own private Slack app. It reads the conversations you're in. It sends replies and reactions, and marks things read, only when you click.
 - **OpenAI:** to summarise, Splark sends the unread messages of conversations that changed to OpenAI's Responses API under your ChatGPT account, with `store: false` so OpenAI doesn't keep them. For each conversation that is:
-  - the messages' text (long ones cut short), their authors' names and when they were sent, plus up to three earlier messages for context;
-  - the channel's or person's name, and the workspace's name;
+  - the messages' text (long ones cut short), their authors' names, when they were sent and whether they mention you, plus up to three earlier messages for context;
+  - the channel's or person's name, whether it's a channel, thread or direct message, and the workspace's name;
   - your own display name and Slack member ID, so the model can tell what's aimed at you.
 
   Nothing else goes to OpenAI.
