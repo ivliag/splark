@@ -25,6 +25,7 @@ Go through this on a real Mac before tagging a release: macOS 26 for Liquid Glas
 - [ ] The spark's brightness and count match the panel: solid with a count for something needing action, half-lit for questions, faint for chatter only.
 - [ ] Post a DM to yourself from another account. Within seconds (Slack open) the count goes up.
 - [ ] Quit Slack. New messages still arrive within a couple of minutes.
+- [ ] With nothing connected (after Reset, or setup closed early), a click on the spark brings setup to the front instead of an empty panel.
 - [ ] Right-click, ⌥-click and ⌃-click each open the menu. **Refresh now** works, **Pause summaries** gets a checkmark, and **Settings…** opens Settings.
 
 ## The panel

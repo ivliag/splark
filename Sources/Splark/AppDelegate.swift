@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func reportPanel() {
         Task {
             try? await Task.sleep(for: .seconds(1.5))
-            controller.togglePanel()
+            controller.showPanelForDebugging()
             try? await Task.sleep(for: .seconds(1.5))
             print(controller.debugReport())
             exit(0)

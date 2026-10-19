@@ -65,7 +65,12 @@ import SwiftUI
         await engine.stop()
     }
 
-    public func togglePanel() { panel.toggle() }
+    /// A click on the spark. Until a workspace is connected there's nothing for the panel to show, so the click leads
+    /// to what finishes setting up: setup itself, or Settings → Slack when a workspace waits for an admin.
+    public func togglePanel() {
+        guard engine.workspaces.isEmpty else { return panel.toggle() }
+        if engine.pendingApps.isEmpty { showSetup() } else { showSettings(.slack) }
+    }
 
     func setSummariesPaused(_ paused: Bool) { Task { await engine.setSummariesPaused(paused) } }
 
@@ -141,6 +146,9 @@ import SwiftUI
     }
 
     // MARK: Debugging
+
+    /// Opens the panel whatever is connected: for `SPLARK_DEBUG_PANEL` runs over the fixtures.
+    public func showPanelForDebugging() { panel.show() }
 
     /// Where the spark and the panel are: for `SPLARK_DEBUG_PANEL` runs, checked from a terminal without screen
     /// recording. (Opened without a click, the panel can't take the keyboard, so that isn't reported.)

@@ -17,11 +17,13 @@ import Testing
     let stateStore = StateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("splark-\(UUID().uuidString)/state.json"))
     let secrets = InMemorySecretStore()
 
-    /// An app over an empty or waiting state: no workspace is running, so Slack is never called.
-    func app(waiting: Bool = false) throws -> AppController {
+    /// An app over an empty, waiting or connected state. No workspace has a token, so Slack is never called (a
+    /// connected one shows "Reconnect needed").
+    func app(waiting: Bool = false, connected: Bool = false) throws -> AppController {
         _ = NSApplication.shared
         var state = SavedState()
         if waiting { state.pendingApps = [SlackAppRegistration(appId: "A7", clientId: "7.7", redirectPort: 53684)] }
+        if connected { state.workspaces = [lumen] }
         try stateStore.save(state)
         let environment = EngineEnvironment(
             secrets: secrets, state: stateStore, slack: { _ in fatalError("no workspace runs in these tests") }, chatGPT: ChatGPTSession(store: secrets),
@@ -91,7 +93,7 @@ import Testing
     }
 
     @Test func aClickOnTheSparkTogglesThePanel() async throws {
-        let app = try app(waiting: true)
+        let app = try app(connected: true)
         app.launch()
         app.togglePanel()
         #expect(app.panel.isShown)
@@ -101,6 +103,27 @@ import Testing
         app.panelModel.startReply(item())
         app.togglePanel()
         #expect(!app.panel.isShown && app.panelModel.expanded == nil)   // reopened, it starts collapsed
+        await app.terminate()
+    }
+
+    /// Nothing connected: an empty "All caught up" panel would mislead, so the spark brings setup back (live run).
+    @Test func withNothingConnectedTheSparkOpensSetup() async throws {
+        let app = try app()
+        app.launch()
+        app.setup?.close()
+        app.togglePanel()
+        #expect(!app.panel.isShown && app.setup?.isVisible == true)
+        app.setup?.close()
+        await app.terminate()
+    }
+
+    /// Only a workspace waiting for an admin: the spark opens Settings → Slack, where Finish connecting is.
+    @Test func aWorkspaceWaitingForApprovalOpensSettingsAtSlack() async throws {
+        let app = try app(waiting: true)
+        app.launch()
+        app.togglePanel()
+        #expect(!app.panel.isShown && app.settings?.isVisible == true && app.settingsModel?.section == .slack)
+        app.settings?.close()
         await app.terminate()
     }
 

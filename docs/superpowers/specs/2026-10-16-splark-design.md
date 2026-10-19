@@ -100,7 +100,7 @@ Success means:
 
 - **Colour:** the image is drawn as a template image, so macOS tints it correctly in light and dark menu bars.
 - **Clicks:**
-  - Left-click toggles the panel.
+  - Left-click toggles the panel. Until a workspace is connected it opens setup instead (or Settings → Slack while a workspace waits for an admin's approval): an empty panel would only say "All caught up".
   - Right-click (or ⌥-click, or ⌃-click for trackpads without a right click) opens a small menu: Refresh now, Settings…, Pause summaries, Quit.
 
 ### 4.3 Panel
