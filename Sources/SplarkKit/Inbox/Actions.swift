@@ -42,7 +42,10 @@ public enum DeepLink {
 /// Each shows at once and rolls back if Slack refuses.
 @MainActor @Observable
 public final class Actions {
-    public struct UndoToken: Hashable, Sendable { let id = UUID() }
+    public struct UndoToken: Hashable, Sendable {
+        let id = UUID()
+        public init() {}
+    }
 
     public private(set) var lastFailure: ActionFailure?
 
