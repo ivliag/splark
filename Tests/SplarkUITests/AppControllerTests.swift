@@ -134,10 +134,17 @@ import Testing
         let expected: [(String, Selector)] = [
             ("x", #selector(NSText.cut(_:))), ("c", #selector(NSText.copy(_:))), ("v", #selector(NSText.paste(_:))),
             ("a", #selector(NSText.selectAll(_:))), ("z", Selector(("undo:"))), ("w", #selector(NSWindow.performClose(_:))),
-            ("q", #selector(NSApplication.terminate(_:))),
         ]
         for (key, action) in expected {
             #expect(items.contains { $0.keyEquivalent == key && $0.action == action }, "⌘\(key)")
         }
+    }
+
+    /// The panel takes the keyboard while another app stays frontmost, so ⌘Q meant for that app would quit Splark
+    /// (it did, in the live run). Quit is in the spark's menu instead.
+    @Test func commandQIsLeftToTheFrontmostApp() {
+        let items = AppController.mainMenu().items.flatMap { $0.submenu?.items ?? [] }
+        #expect(!items.contains { $0.keyEquivalent == "q" })
+        #expect(!items.contains { $0.action == #selector(NSApplication.terminate(_:)) })
     }
 }

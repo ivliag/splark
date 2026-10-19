@@ -116,7 +116,8 @@ import SwiftUI
     // MARK: Menus
 
     /// The app's main menu. It never shows (Splark has no Dock icon or menu bar of its own), but its key equivalents
-    /// give the setup and Settings windows ⌘V, ⌘C, ⌘A, ⌘Z and ⌘W.
+    /// give the setup and Settings windows ⌘V, ⌘C, ⌘A, ⌘Z and ⌘W. No ⌘Q: the panel takes the keyboard while another
+    /// app stays frontmost, so ⌘Q meant for that app would quit Splark. Quit is in the spark's menu.
     public static func mainMenu() -> NSMenu {
         let main = NSMenu()
         func item(_ title: String, _ action: Selector, _ key: String, _ modifiers: NSEvent.ModifierFlags = .command) -> NSMenuItem {
@@ -131,7 +132,7 @@ import SwiftUI
             holder.submenu = menu
             main.addItem(holder)
         }
-        add("Splark", [item("Quit Splark", #selector(NSApplication.terminate(_:)), "q")])
+        add("Splark", [])   // AppKit takes the first menu as the application menu
         add("Edit", [item("Undo", Selector(("undo:")), "z"), item("Redo", Selector(("redo:")), "z", [.command, .shift]), .separator(),
                      item("Cut", #selector(NSText.cut(_:)), "x"), item("Copy", #selector(NSText.copy(_:)), "c"),
                      item("Paste", #selector(NSText.paste(_:)), "v"), item("Select All", #selector(NSText.selectAll(_:)), "a")])
