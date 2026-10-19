@@ -13,12 +13,24 @@ import SplarkKit
 
 extension Actions: PanelActions {}
 
+/// Muting a channel in Splark (the engine's excluded channels). `SplarkEngine` is the real one.
+@MainActor public protocol ChannelMuting: AnyObject {
+    func mute(channel: String, teamId: String) async
+    func unmute(channel: String, teamId: String) async
+}
+
+extension SplarkEngine: ChannelMuting {}
+
 /// The panel's behaviour, apart from its looks (spec §4.3): which row is open, reply drafts, toasts with undo,
 /// and what Esc does.
 @MainActor @Observable public final class PanelModel {
     public struct Toast: Equatable {
+        public enum Undo: Equatable {
+            case markRead(Actions.UndoToken)
+            case unmute(ItemKey)
+        }
         public let text: String
-        public let undo: Actions.UndoToken?
+        public let undo: Undo?
     }
 
     public private(set) var expanded: InboxItem.ID?
@@ -29,15 +41,17 @@ extension Actions: PanelActions {}
     public private(set) var toast: Toast?
 
     private let actions: PanelActions
+    private let muting: ChannelMuting?
     private let toastDuration: Duration
     private let close: () -> Void
     private let openSlack: () -> Void
     private let openSettings: () -> Void
     private var toastTask: Task<Void, Never>?
 
-    public init(actions: PanelActions, toastDuration: Duration = .seconds(4), close: @escaping () -> Void,
+    public init(actions: PanelActions, muting: ChannelMuting? = nil, toastDuration: Duration = .seconds(4), close: @escaping () -> Void,
                 openSlack: @escaping () -> Void, openSettings: @escaping () -> Void) {
         self.actions = actions
+        self.muting = muting
         self.toastDuration = toastDuration
         self.close = close
         self.openSlack = openSlack
@@ -96,20 +110,35 @@ extension Actions: PanelActions {}
     /// The ✓ button: gone at once, with 4 seconds to undo.
     public func markRead(_ item: InboxItem) {
         if expanded == item.id { expanded = nil }
-        show(Toast(text: "Marked as read", undo: actions.markRead([item])))
+        show(Toast(text: "Marked as read", undo: .markRead(actions.markRead([item]))))
     }
 
     /// "Just comments" → ✓✓.
     public func markAllRead(_ items: [InboxItem]) {
         guard !items.isEmpty else { return }
         commentsOpen = false
-        show(Toast(text: "Marked \(items.count) as read", undo: actions.markRead(items)))
+        show(Toast(text: "Marked \(items.count) as read", undo: .markRead(actions.markRead(items))))
     }
 
     public func undo() {
-        guard let token = toast?.undo else { return }
-        actions.undo(token)
+        switch toast?.undo {
+        case .markRead(let token)?: actions.undo(token)
+        case .unmute(let key)?:
+            let muting = muting
+            Task { await muting?.unmute(channel: key.channelId, teamId: key.teamId) }
+        case nil: return
+        }
         dismissToast()
+    }
+
+    /// "Mute #eng" in the open message: Splark leaves the channel out from now on (Settings → Channels… lists it),
+    /// with Undo. Slack doesn't tell apps which channels are muted there.
+    public func mute(_ item: InboxItem) async {
+        guard item.canMute, let muting else { return }
+        if expanded == item.id { expanded = nil }
+        focusedReply = nil
+        await muting.mute(channel: item.key.channelId, teamId: item.key.teamId)
+        show(Toast(text: "Muted \(item.title)", undo: .unmute(item.key)))
     }
 
     /// Open in Slack closes the panel (spec §4.3).

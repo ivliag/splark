@@ -45,6 +45,26 @@ import Testing
         #expect(controller.window.frame.height == 420 && controller.window.frame.maxY == top)
     }
 
+    /// The spark's frame doesn't stay put while the panel is open: with a second display it can follow the active menu
+    /// bar, and other menu-bar items push it along. Opening or closing "Just comments" resizes the panel, which then
+    /// jumped off the top of an external display. It keeps the spot it opened at until it closes.
+    @Test func resizingWhileOpenKeepsTheSpotItOpenedAt() {
+        let external = NSRect(x: -191, y: 982, width: 1920, height: 1050)    // visible frame of a display above the laptop
+        var spark = NSRect(x: 1000, y: 2036, width: 45, height: 22)
+        let controller = PanelController(anchor: { spark }, screen: { external })
+        controller.contentSizeChanged(CGSize(width: 372, height: 300))
+        controller.show()
+        let opened = controller.window.frame
+        spark = NSRect(x: 889, y: 2600, width: 45, height: 22)
+        controller.contentSizeChanged(CGSize(width: 372, height: 420))
+        #expect(controller.window.frame == NSRect(x: opened.minX, y: opened.maxY - 420, width: 372, height: 420))
+        controller.close()
+        controller.show()
+        let reopened = PanelController.frame(for: CGSize(width: 372, height: 420), under: spark, in: external)
+        #expect(controller.window.frame.maxY == reopened.maxY)   // the next opening goes under the spark wherever it is now
+        controller.close()
+    }
+
     @Test func escapeIsForwarded() {
         var escaped = false
         let controller = PanelController(anchor: { nil }, screen: { .zero })

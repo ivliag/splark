@@ -31,7 +31,7 @@ import SwiftUI
             quit: { NSApp.terminate(nil) })
         statusItem = statusButton.map { StatusItemController(button: $0, handlers: handlers) } ?? StatusItemController(handlers: handlers)
         panel = PanelController(anchor: { [weak self] in self?.statusItem.buttonFrameOnScreen })
-        panelModel = PanelModel(actions: engine.actions, close: { [weak self] in self?.panel.close() },
+        panelModel = PanelModel(actions: engine.actions, muting: engine, close: { [weak self] in self?.panel.close() },
                                 openSlack: { NSWorkspace.shared.open(URL(string: "slack://open")!) },
                                 openSettings: { [weak self] in self?.showSettings() })
         panel.onEscape = { [weak self] in self?.panelModel.escape() }

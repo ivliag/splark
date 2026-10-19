@@ -232,6 +232,16 @@ final class StubbornSecrets: SecretStore, @unchecked Sendable {
         #expect(pasted.registration(for: "T1") == nil)
     }
 
+    /// "Mute #eng" in the panel: the channel joins the excluded ones (Settings lists it), and Undo takes it back out.
+    @Test func mutingAChannelExcludesIt() async throws {
+        let splark = try engine()
+        await splark.setExcluded(["G1"], teamId: "T1")
+        await splark.mute(channel: "C1", teamId: "T1")
+        #expect(splark.excludedChannels(teamId: "T1") == ["G1", "C1"])
+        await splark.unmute(channel: "C1", teamId: "T1")
+        #expect(splark.excludedChannels(teamId: "T1") == ["G1"])
+    }
+
     @Test func pendingAppsCanBeRemoved() async throws {
         let splark = try engine()
         let app = SlackAppRegistration(appId: "A7", clientId: "7.7", redirectPort: 53683)

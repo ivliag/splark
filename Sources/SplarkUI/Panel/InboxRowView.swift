@@ -99,8 +99,16 @@ struct InboxRowView: View {
                         Text("Open in Slack")
                     }
                 }
+                if item.canMute {
+                    ChipButton(help: "Mute \(item.title) in Splark: it leaves the panel from now on", action: { Task { await model.mute(item) } }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "speaker.slash").font(.system(size: 11))
+                            Text("Mute")
+                        }
+                    }
+                }
                 Spacer(minLength: 8)
-                Text("↵ send · esc close").font(Theme.font(10.5)).foregroundStyle(palette.tertiary)
+                Text("↵ send").font(Theme.font(10.5)).foregroundStyle(palette.tertiary).lineLimit(1).fixedSize()
             }
             .padding(.leading, -5)
             .padding(.top, 6)

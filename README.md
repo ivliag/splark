@@ -23,7 +23,8 @@ Splark needs macOS 14 or later. Summaries need a ChatGPT Plus or Pro plan; witho
 - **The spark** is solid when something needs action, half-lit when questions are waiting, and faint when there's only chatter or nothing at all. The number next to it counts what needs you; turn it off in Settings → General.
 - **Click the spark** to open the panel. Hover a row to reply, react (👀 ✅ 👍), open it in Slack, or mark it as read (you can undo for 4 seconds). Click a row to read the messages and reply. Chatter is folded into "Just comments" at the bottom. Esc closes the panel.
 - **Right-click the spark** (or ⌥- or ⌃-click it) for Refresh now, Settings…, Pause summaries and Quit.
-- **Settings** manages workspaces (reconnect, finish connecting after an admin's approval, excluded channels, remove), ChatGPT (account, model, pause), open at login, and Reset Splark.
+- **Muting a channel:** Slack doesn't tell apps which channels you've muted there, so Splark keeps its own list. Open a channel's message in the panel and click **Mute** (Undo is there for 4 seconds), or tick channels in Settings → Workspaces → **Channels…**.
+- **Settings** manages workspaces (reconnect, finish connecting after an admin's approval, muted channels, remove), ChatGPT (account, model, pause), open at login, and Reset Splark.
 
 ## What Splark sends, and where
 
@@ -35,7 +36,7 @@ Splark needs macOS 14 or later. Summaries need a ChatGPT Plus or Pro plan; witho
 
   Nothing else goes to OpenAI.
 - **Nobody else:** there's no Splark server, and no analytics, crash reports or update checks.
-- **On your Mac:** Slack and ChatGPT tokens are in your Keychain. `~/Library/Application Support/Splark/state.json` holds workspace names and IDs, excluded channels, settings, thread IDs and people's display names. Message text and summaries stay in memory and are gone when Splark quits.
+- **On your Mac:** Slack and ChatGPT tokens are in your Keychain. `~/Library/Application Support/Splark/state.json` holds workspace names and IDs, muted channels, settings, thread IDs and people's display names. Message text and summaries stay in memory and are gone when Splark quits.
 
 ## Keychain prompts after an update
 

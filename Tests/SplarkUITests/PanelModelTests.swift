@@ -38,6 +38,12 @@ import Testing
     func open(_ item: InboxItem) async { opened.append(item.key.channelId) }
 }
 
+@MainActor final class FakeMuting: ChannelMuting {
+    var calls: [String] = []
+    func mute(channel: String, teamId: String) async { calls.append("mute \(teamId)/\(channel)") }
+    func unmute(channel: String, teamId: String) async { calls.append("unmute \(teamId)/\(channel)") }
+}
+
 @MainActor @Suite struct PanelModelTests {
     let actions = FakeActions()
     let calls = Calls()
@@ -97,7 +103,7 @@ import Testing
         m.toggle(row)
         m.markRead(row)
         #expect(actions.marked == [["C1"]] && m.expanded == nil)
-        #expect(m.toast == PanelModel.Toast(text: "Marked as read", undo: actions.token))
+        #expect(m.toast == PanelModel.Toast(text: "Marked as read", undo: .markRead(actions.token)))
         #expect(await eventually { m.toast == nil })
     }
 
@@ -191,5 +197,29 @@ import Testing
         m.drafts[review.id] = "Looking now"
         await m.send(rollback)
         #expect(m.drafts[rollback.id] == nil && m.drafts[review.id] == "Looking now")
+    }
+
+    /// Slack doesn't tell apps which channels are muted, so muting is Splark's own: from the open message, with Undo.
+    @Test func mutingAChannelFromTheMessageWithUndo() async {
+        let muting = FakeMuting()
+        let m = PanelModel(actions: actions, muting: muting, close: {}, openSlack: {}, openSettings: {})
+        let row = item(title: "#eng")
+        #expect(row.canMute)
+        m.toggle(row)
+        await m.mute(row)
+        #expect(muting.calls == ["mute T1/C1"] && m.expanded == nil)
+        #expect(m.toast == PanelModel.Toast(text: "Muted #eng", undo: .unmute(row.key)))
+        m.undo()
+        #expect(await eventually { muting.calls == ["mute T1/C1", "unmute T1/C1"] })
+        #expect(m.toast == nil)
+    }
+
+    @Test func directMessagesCantBeMuted() async {
+        let muting = FakeMuting()
+        let m = PanelModel(actions: actions, muting: muting, close: {}, openSlack: {}, openSettings: {})
+        let dm = item(kind: .dm, title: "Marta Ruiz")
+        #expect(!dm.canMute)
+        await m.mute(dm)
+        #expect(muting.calls.isEmpty && m.toast == nil)
     }
 }

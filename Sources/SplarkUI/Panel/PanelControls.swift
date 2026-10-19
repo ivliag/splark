@@ -13,6 +13,8 @@ struct ChipButton<Label: View>: View {
         let palette = Palette(scheme)
         Button(action: action) {
             label()
+                .lineLimit(1)
+                .fixedSize()
                 .font(Theme.font(11.5, .medium))
                 .foregroundStyle(hovering ? palette.text : palette.secondary)
                 .frame(minWidth: 24, minHeight: 22)

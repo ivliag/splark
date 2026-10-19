@@ -142,14 +142,14 @@ public struct SettingsView: View {
         .padding(EdgeInsets(top: 11, leading: 14, bottom: 11, trailing: 14))
     }
 
-    // MARK: Excluded channels
+    // MARK: Muted channels
 
     private func channels(_ palette: Palette) -> some View {
         let picker = model.channelPicker!
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Excluded channels in \(picker.name)").font(Theme.font(15, .semibold)).foregroundStyle(palette.text)
-                note("Splark leaves these channels out. Direct messages are never excluded.", palette)
+                Text("Muted channels in \(picker.name)").font(Theme.font(15, .semibold)).foregroundStyle(palette.text)
+                note("Splark leaves muted channels out. Mute one here, or with Mute on its message in the panel. Direct messages can't be muted.", palette)
             }
             TokenField(placeholder: "Search channels", text: Binding(get: { model.channelPicker?.search ?? "" }, set: { model.channelPicker?.search = $0 }),
                        monospaced: false)
@@ -181,7 +181,7 @@ public struct SettingsView: View {
                 }
             }
             HStack(spacing: 8) {
-                note("\(picker.excluded.count) excluded", palette)
+                note("\(picker.excluded.count) muted", palette)
                 Spacer()
                 WindowButton(title: "Cancel", kind: .secondary) { model.cancelChannels() }
                 WindowButton(title: "Save") { Task { await model.saveChannels() } }
@@ -321,6 +321,6 @@ struct Checkbox: View {
             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(on ? Ink(0, opacity: 0) : palette.fieldBorder, lineWidth: 1))
             .overlay { if on { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(palette.buttonText) } }
             .frame(width: 16, height: 16)
-            .accessibilityLabel(Text(on ? "Excluded" : "Included"))
+            .accessibilityLabel(Text(on ? "Muted" : "Not muted"))
     }
 }

@@ -120,7 +120,7 @@ The layout is the prototype's activity-log style.
   - **Click to expand:**
     - The original unread messages (author · time, then text; up to the last 10, with "and N earlier" above).
     - A reply field: "Reply in thread" for channels and threads, "Message <name>" for DMs. Enter sends, Esc collapses.
-    - Reactions and Open in Slack underneath.
+    - Reactions and Open in Slack underneath, and for a channel or channel thread **Mute** (its tooltip names the channel): Splark leaves the channel out from then on, with Undo for 4 seconds. Slack doesn't tell apps which channels are muted there (`users.prefs.get` needs the classic `read` scope), so Splark keeps its own list.
 - **Just comments:** a single collapsed line at the bottom, "Just comments · N conversations".
   - Expanding it shows the same rows with dimmed sparks.
   - Hovering it shows ✓✓ mark all read.
@@ -160,7 +160,7 @@ One small window with four sections, as tabs in its title bar, in setup's look.
   - A list with status (Connected / Waiting for approval / Token revoked) and the last sync time. One line below the list says whether Slack's Dock badge can be read: it belongs to the Slack app, not to a workspace.
   - Add (setup's Slack step on its own), Finish connecting, Reconnect, and Remove (which deletes the token from Keychain and tells the user how to delete the private Slack app). Remove and Reset ask first, inline.
   - A workspace connected with a pasted token has no app to Allow again: when its token stops working, it offers "Paste new token" instead of Reconnect.
-  - Per-workspace excluded channels (a picker).
+  - Per-workspace muted channels (a picker): the same list the panel's Mute adds to.
 - **ChatGPT:** the account and plan, a model picker (from `GET /v1/models`, with a recommended default), Sign out, and Pause summaries.
 - **General:** Open at login, Show count, and Reset Splark (clears all data).
 - **About:** version, licence, a link to the repo, and credits (Doll).

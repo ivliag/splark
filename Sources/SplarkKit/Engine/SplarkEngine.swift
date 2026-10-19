@@ -295,6 +295,15 @@ public final class SplarkEngine {
         try environment.secrets.delete(SlackCredentials.key(teamId: teamId))
     }
 
+    /// "Mute #eng" in the panel: one more excluded channel. Slack doesn't tell apps which channels are muted there.
+    public func mute(channel: String, teamId: String) async {
+        await setExcluded(excludedChannels(teamId: teamId).union([channel]), teamId: teamId)
+    }
+
+    public func unmute(channel: String, teamId: String) async {
+        await setExcluded(excludedChannels(teamId: teamId).subtracting([channel]), teamId: teamId)
+    }
+
     public func setExcluded(_ channels: Set<String>, teamId: String) async {
         state.excludedChannels[teamId] = channels.sorted()
         inbox.setExcluded(channels, teamId: teamId)

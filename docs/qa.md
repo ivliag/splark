@@ -37,6 +37,7 @@ Go through this on a real Mac before tagging a release: macOS 26 for Liquid Glas
 - [ ] Mark a row read with the ✓ circle: it goes, with "Marked as read" and **Undo** for 4 seconds. Undo brings it back and Slack still shows it unread. Without undo, Slack shows it read after the toast.
 - [ ] **Just comments** expands; ✓✓ marks them all read.
 - [ ] **Open in Slack** opens the right message in the Slack app and closes the panel.
+- [ ] Open a channel's message and click **Mute**: its items leave the panel and the count, and "Muted #channel" offers **Undo**. Undo brings them back. Settings → **Channels…** shows it ticked. A DM has no Mute.
 - [ ] A click in another app closes the panel.
 - [ ] With nothing unread: a dimmed spark and "Nothing unread in Slack."
 - [ ] Switch the system between light and dark: the panel and the spark follow.
@@ -44,7 +45,7 @@ Go through this on a real Mac before tagging a release: macOS 26 for Liquid Glas
 ## Settings
 
 - [ ] **Workspaces:** each shows "Connected · Synced Xm ago". The line under the list says whether Slack is open.
-- [ ] **Channels…** lists your channels; search filters them. Exclude one, **Save**: its items leave the panel. Include it again: they come back.
+- [ ] **Channels…** lists your channels; search filters them. Mute one, **Save**: its items leave the panel. Unmute it: they come back.
 - [ ] **+ Add workspace** opens "Add a workspace": connecting works the same way as in setup, and **Done** closes it.
 - [ ] **Remove** asks first and mentions api.slack.com/apps. Removing takes the workspace's items out of the panel.
 - [ ] **ChatGPT:** the account shows. The model menu lists the plan's models with the recommended one; choosing one sticks after a restart. **Pause summaries** shows "Summaries paused" in the panel. **Sign out** turns summaries off ("Summaries paused: sign in again"); **Sign in with ChatGPT** brings them back.
