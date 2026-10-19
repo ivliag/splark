@@ -26,6 +26,8 @@ public struct Palette: Equatable, Sendable {
     public let glassTint: Ink
     /// Setup and Settings (design/prototype/setup.html).
     public let window, windowBorder, button, buttonText, tile, tileText, field, fieldBorder: Ink
+    /// A button that can't be pressed yet: quiet, with its label still readable (secondary text on it).
+    public let disabledButton: Ink
 
     public init(_ scheme: ColorScheme) {
         if scheme == .dark {
@@ -37,6 +39,7 @@ public struct Palette: Equatable, Sendable {
             panelBorder = Ink(0xffffff, opacity: 0.12); knock = Ink(0x2c2c30)
             window = Ink(0x28282c, opacity: 0.92); windowBorder = Ink(0xffffff, opacity: 0.10)
             button = Ink(0xd0d0d5); buttonText = Ink(0x232327); tile = Ink(0x5a5a60); tileText = Ink(0xececf0)
+            disabledButton = Ink(0x3a3a3f)
             field = Ink(0x000000, opacity: 0.25); fieldBorder = Ink(0xffffff, opacity: 0.12)
         } else {
             text = Ink(0x2e2e32); secondary = Ink(0x626268); tertiary = Ink(0x86868c); spark = Ink(0x58585e)
@@ -47,6 +50,7 @@ public struct Palette: Equatable, Sendable {
             panelBorder = Ink(0x000000, opacity: 0.10); knock = Ink(0xf4f4f6)
             window = Ink(0xfafafc, opacity: 0.92); windowBorder = Ink(0x000000, opacity: 0.10)
             button = Ink(0x4a4a50); buttonText = Ink(0xf4f4f6); tile = Ink(0x4a4a50); tileText = Ink(0xe6e6ea)
+            disabledButton = Ink(0xe6e6ea)
             field = Ink(0xffffff, opacity: 0.95); fieldBorder = Ink(0x000000, opacity: 0.12)
         }
         toastBackground = Ink(0x1e1e20, opacity: 0.86)

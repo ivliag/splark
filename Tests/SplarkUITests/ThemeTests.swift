@@ -43,6 +43,18 @@ func pixel(_ png: Data, x: Int, y: Int) -> (r: Int, g: Int, b: Int, a: Int) {
         #expect(Self.contrast(palette.spark.hex, panel) >= 4.5)
     }
 
+    /// A disabled Connect or Continue faded to 35% and its label vanished (live run): disabled buttons keep a readable
+    /// label on a quiet background.
+    @Test(arguments: [ColorScheme.light, .dark])
+    func disabledButtonsStayReadable(scheme: ColorScheme) {
+        let palette = Palette(scheme)
+        for kind in [WindowButton.Kind.primary, .secondary] {
+            let colors = WindowButton.colors(kind, enabled: false, palette: palette)
+            #expect(Self.contrast(colors.text.hex, colors.background.hex) >= 4.5, "\(kind)")
+            #expect(colors.background != WindowButton.colors(.primary, enabled: true, palette: palette).background)
+        }
+    }
+
     @Test func thePanelIsThePrototypesSize() {
         #expect(Theme.panelWidth == 372 && Theme.panelCorner == 18)
     }

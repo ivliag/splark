@@ -14,20 +14,31 @@ struct WindowButton: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let palette = Palette(scheme)
+        let colors = Self.colors(kind, enabled: enabled, palette: Palette(scheme))
         Button(action: action) {
             Text(title)
                 .font(Theme.font(13, kind == .primary ? .semibold : .medium))
-                .foregroundStyle(kind == .primary ? palette.buttonText : kind == .ghost ? palette.secondary : palette.text)
+                .foregroundStyle(colors.text)
                 .frame(maxWidth: wide ? .infinity : nil)
                 .padding(.vertical, wide ? 11 : 9)
                 .padding(.horizontal, kind == .ghost ? 10 : 18)
-                .background(RoundedRectangle(cornerRadius: 10).fill(kind == .primary ? palette.button : kind == .secondary ? palette.chip : Ink(0, opacity: 0)))
+                .background(RoundedRectangle(cornerRadius: 10).fill(colors.background))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
+    }
+
+    /// A disabled button is quiet but readable: the disabled grey, with secondary text. (Fading the whole button to 35%
+    /// left a dark button's white label invisible.)
+    static func colors(_ kind: Kind, enabled: Bool, palette: Palette) -> (background: Ink, text: Ink) {
+        switch (kind, enabled) {
+        case (.ghost, true): return (Ink(0, opacity: 0), palette.secondary)
+        case (.ghost, false): return (Ink(0, opacity: 0), palette.tertiary)
+        case (_, false): return (palette.disabledButton, palette.secondary)
+        case (.primary, true): return (palette.button, palette.buttonText)
+        case (.secondary, true): return (palette.chip, palette.text)
+        }
     }
 }
 
