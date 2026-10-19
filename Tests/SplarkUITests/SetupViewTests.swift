@@ -48,12 +48,13 @@ import Testing
         let controller = SetupWindowController(model: SetupModel(services: PreviewSetupServices()))
         controller.show()
         defer { controller.close() }
-        try await Task.sleep(for: .milliseconds(200))
         // Front to back, only this process's windows (other tests' too) may come before it.
-        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? [])
-            .filter { ($0[kCGWindowLayer as String] as? Int) == 0 }
-        let index = try #require(windows.firstIndex { ($0[kCGWindowNumber as String] as? Int) == controller.window.windowNumber })
-        let ahead = windows[..<index].compactMap { $0[kCGWindowOwnerPID as String] as? Int32 }
-        #expect(ahead.allSatisfy { $0 == getpid() })
+        func inFront() -> Bool {
+            let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? [])
+                .filter { ($0[kCGWindowLayer as String] as? Int) == 0 }
+            guard let index = windows.firstIndex(where: { ($0[kCGWindowNumber as String] as? Int) == controller.window.windowNumber }) else { return false }
+            return windows[..<index].allSatisfy { ($0[kCGWindowOwnerPID as String] as? Int32) == getpid() }
+        }
+        #expect(await eventually { inFront() })
     }
 }
