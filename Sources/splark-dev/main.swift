@@ -17,6 +17,7 @@ usage: splark-dev <command>
   inbox [--minutes N] [--no-text]     run the whole engine against your Slack and ChatGPT, printing the inbox
   triage-eval [--model M]             score the triage evaluation set against your ChatGPT plan
   make-icon OUT.icns                  render the app icon at every size and pack it with iconutil
+  render-ui [--out DIR]               render every UI state with fixture data to PNGs (light and dark)
 """
 
 do {
@@ -32,6 +33,7 @@ do {
     case "inbox": try await inboxCommand()
     case "triage-eval": try await triageEvalCommand()
     case "make-icon": try makeIconCommand()
+    case "render-ui": try renderUICommand()
     default: print(usage)
     }
 } catch {
