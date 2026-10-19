@@ -144,9 +144,16 @@ import SwiftUI
     /// Where the spark and the panel are: for `SPLARK_DEBUG_PANEL` runs, checked from a terminal without screen
     /// recording. (Opened without a click, the panel can't take the keyboard, so that isn't reported.)
     public func debugReport() -> String {
-        """
+        let background = panel.window.contentView
+        func hosting(in view: NSView) -> NSView? {
+            if String(describing: type(of: view)).hasPrefix("NSHostingView") { return view }
+            return view.subviews.lazy.compactMap { hosting(in: $0) }.first
+        }
+        let contentFrame = background.flatMap { background in hosting(in: background).map { $0.convert($0.bounds, to: background) } }
+        return """
         status item: \(statusItem.buttonFrameOnScreen.map { "\($0)" } ?? "no window")
         panel: shown=\(panel.isShown) frame=\(panel.window.frame) max height=\(panel.maxContentHeight)
+        content: \(contentFrame.map { "\($0)" } ?? "none") in \(panel.window.contentView.map { "\($0.bounds)" } ?? "none")
         """
     }
 }

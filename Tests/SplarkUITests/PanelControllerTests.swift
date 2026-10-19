@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Testing
 @testable import SplarkUI
 
@@ -73,5 +74,34 @@ import Testing
         controller.show()
         #expect(controller.layout.maxHeight == (944 * 0.7).rounded(.down))
         controller.close()
+    }
+
+    /// The content fills the panel, on glass (macOS 26) and on the frosted material alike. On glass it was left at its
+    /// own size, so a short panel showed its content shifted and cut off.
+    @Test func theContentFillsThePanel() throws {
+        let controller = PanelController(anchor: { nil }, screen: { NSRect(x: 0, y: 0, width: 1512, height: 944) })
+        controller.setContent(Color.clear.frame(width: 372, height: 140))
+        controller.contentSizeChanged(CGSize(width: 372, height: 140))
+        let background = try #require(controller.window.contentView)
+        background.layoutSubtreeIfNeeded()
+        let hosting = try #require(Self.hostingView(in: background))
+        #expect(hosting.convert(hosting.bounds, to: background) == background.bounds)
+        #expect(background.bounds.size == CGSize(width: 372, height: 140))
+    }
+
+    /// On macOS 26 the glass's own layout resized the window's content view apart from the window (twice its size on
+    /// Retina), centring the panel's content off the panel. The content view keeps the window's size whatever asks.
+    @Test func theContentViewKeepsTheWindowsSize() throws {
+        let controller = PanelController(anchor: { nil }, screen: { NSRect(x: 0, y: 0, width: 1512, height: 944) })
+        controller.setContent(Color.clear.frame(width: 372, height: 140))
+        controller.contentSizeChanged(CGSize(width: 372, height: 140))
+        let background = try #require(controller.window.contentView)
+        background.setFrameSize(NSSize(width: 744, height: 280))
+        #expect(background.frame.size == controller.window.frame.size)
+    }
+
+    static func hostingView(in view: NSView) -> NSView? {
+        if String(describing: type(of: view)).hasPrefix("NSHostingView") { return view }
+        return view.subviews.lazy.compactMap { hostingView(in: $0) }.first
     }
 }

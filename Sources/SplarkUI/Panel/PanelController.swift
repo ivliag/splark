@@ -127,10 +127,17 @@ final class SparkPanel: NSPanel {
     private static func background(around content: NSView) -> NSView {
         #if compiler(>=6.2)
         if #available(macOS 26, *) {
+            // The glass sits behind the content rather than holding it: holding the SwiftUI content, it sized it apart
+            // from the window (twice the window on Retina), so the panel showed its content shifted and cut off.
+            let container = WindowSizedView()
             let glass = NSGlassEffectView()
             glass.cornerRadius = Theme.panelCorner
-            glass.contentView = content
-            return glass
+            for view in [glass, content] {
+                view.frame = container.bounds
+                view.autoresizingMask = [.width, .height]
+                container.addSubview(view)
+            }
+            return container
         }
         #endif
         let frosted = NSVisualEffectView()
@@ -144,5 +151,13 @@ final class SparkPanel: NSPanel {
         content.autoresizingMask = [.width, .height]
         frosted.addSubview(content)
         return frosted
+    }
+}
+
+/// A window's content view that always takes the window's size. On macOS 26 the glass's own layout resized the content
+/// view apart from the window (twice its size on Retina), which put the panel's content off the panel.
+final class WindowSizedView: NSView {
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(window?.frame.size ?? newSize)
     }
 }
