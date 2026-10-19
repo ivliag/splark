@@ -27,11 +27,11 @@ public struct SetupView: View {
         .background(palette.window)
     }
 
-    /// Four sparks in the title bar: bright for the current step, brighter for done ones, dimmed for the rest.
+    /// Four pixel dots in the title bar: solid for the current step, outlined for done ones, faint for the rest.
     private func steps(_ palette: Palette) -> some View {
         HStack(spacing: 14) {
             ForEach(model.addingWorkspace ? [] : SetupModel.Step.allCases, id: \.self) { step in
-                SparkView(level: step == model.step ? .bright : step.rawValue < model.step.rawValue ? .brighter : .dimmed)
+                PixelGridView(grid: PixelArt.dot, level: step == model.step ? .bright : step.rawValue < model.step.rawValue ? .brighter : .dimmed)
                     .help(["Welcome", "Slack", "ChatGPT", "Done"][step.rawValue])
             }
         }

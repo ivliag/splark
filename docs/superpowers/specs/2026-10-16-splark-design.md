@@ -137,7 +137,7 @@ The layout is the prototype's activity-log style.
 
 ### 4.4 Setup (first run)
 
-A single window with four steps, shown as four sparks in the title bar (bright = current, brighter = done, dimmed = upcoming). Copy and states are as in `setup.html`.
+A single window with four steps, shown as four pixel dots in the title bar (solid = current, outlined = done, faint = upcoming). Copy and states are as in `setup.html`.
 
 1. **Welcome.** App icon, tagline "Slack, sorted by what needs you.", and three points: ranking, quick actions, privacy.
 2. **Connect Slack.** Repeat for each workspace.

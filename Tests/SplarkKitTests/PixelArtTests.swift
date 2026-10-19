@@ -27,6 +27,17 @@ import Testing
         #expect(PixelArt.spark.litPoints(level: .dimmed).count == 13)
     }
 
+    /// Setup's progress dots: a 7×7 pixel circle, at the same three levels as the spark.
+    @Test func theStepDotIsAPixelCircle() {
+        #expect(PixelArt.dot.rendered(level: .bright) == [
+            "..###..", ".#####.", "#######", "#######", "#######", ".#####.", "..###..",
+        ])
+        #expect(PixelArt.dot.rendered(level: .brighter) == [
+            "..###..", ".#.#.#.", "#.#.#.#", "##.#.##", "#.#.#.#", ".#.#.#.", "..###..",
+        ])
+        #expect(PixelArt.dot.litPoints(level: .dimmed).count == 9)
+    }
+
     @Test func imageHasGridSizeTimesScaleAndPaintsOnlyLitPixels() throws {
         let image = PixelArt.image(PixelArt.spark, level: .bright, scale: 2, color: .black)
         #expect(image.size == NSSize(width: 22, height: 22))

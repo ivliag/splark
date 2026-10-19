@@ -68,6 +68,17 @@ public enum PixelArt {
     ])
 
     /// Renders a grid at `scale` points per pixel. Template images are tinted by AppKit (menu bar).
+    /// A 7×7 pixel circle: setup's progress dots.
+    public static let dot = PixelGrid(rows: [
+        "..###..",
+        ".#####.",
+        "#######",
+        "#######",
+        "#######",
+        ".#####.",
+        "..###..",
+    ])
+
     public static func image(_ grid: PixelGrid, level: SparkLevel, scale: CGFloat = 1, color: NSColor = .black, template: Bool = false) -> NSImage {
         let size = NSSize(width: CGFloat(grid.width) * scale, height: CGFloat(grid.height) * scale)
         let points = grid.litPoints(level: level)
