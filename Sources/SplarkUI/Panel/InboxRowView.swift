@@ -41,7 +41,7 @@ struct InboxRowView: View {
             }
             if expanded { detail(palette).padding(.leading, 22).padding(.top, 9) }
         }
-        .padding(EdgeInsets(top: 8, leading: 12, bottom: 9, trailing: 6))
+        .padding(EdgeInsets(top: 10, leading: 12, bottom: 11, trailing: 6))
         .background(RoundedRectangle(cornerRadius: 10).fill(hovering || forceHover || expanded ? palette.rowHover : Ink(0, opacity: 0)))
         .contentShape(Rectangle())
         .onTapGesture { model.toggle(item) }

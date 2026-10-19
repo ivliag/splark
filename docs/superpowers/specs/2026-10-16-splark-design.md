@@ -48,7 +48,7 @@ Success means:
 
 ### 4.1 Visual language
 
-- **Monochrome pixel art, low contrast.** No accent colours in Splark's own UI. Every icon is 1-bit pixel art drawn on a grid, rendered crisp (one grid pixel = one point, so two device pixels on Retina).
+- **Monochrome pixel art, quiet but readable.** No accent colours in Splark's own UI. Text keeps at least 7:1 contrast against the panel, secondary text 4.5:1 and the quietest text 3:1; on Liquid Glass the panel is tinted with its own colour so a dark or busy desktop doesn't wash it out. Every icon is 1-bit pixel art drawn on a grid, rendered crisp (one grid pixel = one point, so two device pixels on Retina).
 - **The soft spark** is an 11×11 four-point star:
 
   ```
@@ -77,10 +77,10 @@ Success means:
 
   | | Light | Dark |
   |---|---|---|
-  | Text | `#3a3a3e` | `#dcdce0` |
-  | Secondary text | `#7d7d83` | `#98989e` |
-  | Tertiary text | `#adadb3` | `#696970` |
-  | Spark | `#6a6a70` | `#b4b4ba` |
+  | Text | `#2e2e32` | `#e4e4e8` |
+  | Secondary text | `#626268` | `#a6a6ac` |
+  | Tertiary text | `#86868c` | `#7c7c83` |
+  | Spark | `#58585e` | `#b4b4ba` |
 
   Bold leads use weight 590. The panel uses Liquid Glass on macOS 26 and a frosted material on macOS 14–15.
 - **Pixel font:** a 5×7 font for initials and digits in setup and settings (workspace tiles, step numbers).

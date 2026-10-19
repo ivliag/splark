@@ -13,10 +13,34 @@ func pixel(_ png: Data, x: Int, y: Int) -> (r: Int, g: Int, b: Int, a: Int) {
 
 @MainActor @Suite struct ThemeTests {
     @Test func thePaletteIsTheSpecs() {
-        #expect(Palette(.light).text.hex == 0x3a3a3e && Palette(.dark).text.hex == 0xdcdce0)
-        #expect(Palette(.light).secondary.hex == 0x7d7d83 && Palette(.dark).secondary.hex == 0x98989e)
-        #expect(Palette(.light).tertiary.hex == 0xadadb3 && Palette(.dark).tertiary.hex == 0x696970)
-        #expect(Palette(.light).spark.hex == 0x6a6a70 && Palette(.dark).spark.hex == 0xb4b4ba)
+        #expect(Palette(.light).text.hex == 0x2e2e32 && Palette(.dark).text.hex == 0xe4e4e8)
+        #expect(Palette(.light).secondary.hex == 0x626268 && Palette(.dark).secondary.hex == 0xa6a6ac)
+        #expect(Palette(.light).tertiary.hex == 0x86868c && Palette(.dark).tertiary.hex == 0x7c7c83)
+        #expect(Palette(.light).spark.hex == 0x58585e && Palette(.dark).spark.hex == 0xb4b4ba)
+    }
+
+    /// WCAG contrast of an opaque colour against another (1…21).
+    static func contrast(_ a: Int, _ b: Int) -> Double {
+        func luminance(_ hex: Int) -> Double {
+            func channel(_ v: Int) -> Double {
+                let c = Double(v) / 255
+                return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * channel(hex >> 16 & 0xff) + 0.7152 * channel(hex >> 8 & 0xff) + 0.0722 * channel(hex & 0xff)
+        }
+        let (x, y) = (luminance(a), luminance(b))
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    /// On Liquid Glass over a busy desktop the quiet greys disappeared (live run). Each text grey is readable against
+    /// the panel: body text 7:1, secondary text 4.5:1, the quietest 3:1.
+    @Test(arguments: [ColorScheme.light, .dark])
+    func textIsReadableOnThePanel(scheme: ColorScheme) {
+        let palette = Palette(scheme), panel = palette.panelBackground.hex
+        #expect(Self.contrast(palette.text.hex, panel) >= 7)
+        #expect(Self.contrast(palette.secondary.hex, panel) >= 4.5)
+        #expect(Self.contrast(palette.tertiary.hex, panel) >= 3)
+        #expect(Self.contrast(palette.spark.hex, panel) >= 4.5)
     }
 
     @Test func thePanelIsThePrototypesSize() {
@@ -40,6 +64,6 @@ func pixel(_ png: Data, x: Int, y: Int) -> (r: Int, g: Int, b: Int, a: Int) {
 
     @Test func snapshotsRenderInDarkMode() throws {
         let png = try #require(Snapshot.png(Rectangle().fill(Palette(.dark).text).frame(width: 4, height: 4), scheme: .dark, scale: 1))
-        #expect(pixel(png, x: 2, y: 2).r == 0xdc)
+        #expect(pixel(png, x: 2, y: 2).r == 0xe4)
     }
 }

@@ -46,7 +46,7 @@ public struct PanelView: View {
             if inbox.items.isEmpty { empty(palette) } else { list(palette) }
         }
         .frame(width: Theme.panelWidth)
-        .background(layout == .snapshot ? AnyShapeStyle(palette.panelBackground) : AnyShapeStyle(Color.clear))
+        .background(layout == .snapshot ? AnyShapeStyle(palette.panelBackground) : AnyShapeStyle(palette.glassTint))
         .clipShape(RoundedRectangle(cornerRadius: Theme.panelCorner))
         .overlay(RoundedRectangle(cornerRadius: Theme.panelCorner).strokeBorder(palette.panelBorder, lineWidth: 0.5))
         .overlay(alignment: .bottom) { toast(palette) }
@@ -77,8 +77,8 @@ public struct PanelView: View {
             }
             .opacity(hoveringPanel ? 1 : 0)
         }
-        .padding(EdgeInsets(top: 12, leading: 18, bottom: 4, trailing: 10))
-        .frame(minHeight: 42)
+        .padding(EdgeInsets(top: 14, leading: 18, bottom: 10, trailing: 10))
+        .frame(minHeight: 48)
     }
 
     // MARK: List
@@ -90,7 +90,7 @@ public struct PanelView: View {
             }
             comments(palette)
         }
-        .padding(EdgeInsets(top: 2, leading: 6, bottom: 8, trailing: 6))
+        .padding(EdgeInsets(top: 4, leading: 6, bottom: 10, trailing: 6))
 
         switch layout {
         case .snapshot:
@@ -123,7 +123,7 @@ public struct PanelView: View {
                     ReadButton(help: "Mark all as read in Slack", double: true) { model.markAllRead(comments) }
                         .opacity(hoveringComments ? 1 : 0)
                 }
-                .padding(EdgeInsets(top: 10, leading: 12, bottom: 6, trailing: 6))
+                .padding(EdgeInsets(top: 12, leading: 12, bottom: 8, trailing: 6))
                 .contentShape(Rectangle())
                 .onTapGesture { withAnimation(.easeOut(duration: 0.15)) { model.commentsOpen.toggle() } }
                 .onHover { hoveringComments = $0 }
@@ -131,7 +131,7 @@ public struct PanelView: View {
                     ForEach(comments) { item in InboxRowView(item: item, model: model, now: now, forceHover: forceHover == item.id) }
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, 10)
         }
     }
 
