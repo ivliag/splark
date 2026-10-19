@@ -69,15 +69,15 @@ import Testing
         let m = model(), row = item()
         m.startReply(row)
         #expect(m.expanded == row.id && m.focusedReply == row.id)
-        m.drafts[row.key] = "  on it  "
+        m.drafts[row.id] = "  on it  "
         await m.send(row)
         #expect(actions.replies.map(\.1) == ["  on it  "])
-        #expect(m.drafts[row.key] == nil && m.expanded == nil)
+        #expect(m.drafts[row.id] == nil && m.expanded == nil)
     }
 
     @Test func aBlankReplyIsNotSent() async {
         let m = model(), row = item()
-        m.drafts[row.key] = "   "
+        m.drafts[row.id] = "   "
         await m.send(row)
         #expect(actions.replies.isEmpty)
     }
@@ -86,9 +86,9 @@ import Testing
         actions.failReply = true
         let m = model(), row = item()
         m.toggle(row)
-        m.drafts[row.key] = "on it"
+        m.drafts[row.id] = "on it"
         await m.send(row)
-        #expect(m.drafts[row.key] == "on it" && m.expanded == row.id)
+        #expect(m.drafts[row.id] == "on it" && m.expanded == row.id)
         #expect(m.toast == PanelModel.Toast(text: "Couldn't send. Try again.", undo: nil))
     }
 
@@ -147,10 +147,10 @@ import Testing
         actions.holdReplies = true
         let m = model(), row = item(kind: .dm, title: "Marta Ruiz")
         m.startReply(row)
-        m.drafts[row.key] = "on it"
+        m.drafts[row.id] = "on it"
         let first = Task { await m.send(row) }
         #expect(await eventually { actions.replyCalls == 1 })
-        #expect(m.sending.contains(row.key))
+        #expect(m.sending.contains(row.id))
         let second = Task { await m.send(row) }
         try await Task.sleep(for: .milliseconds(50))
         #expect(actions.replyCalls == 1)
@@ -165,5 +165,31 @@ import Testing
         m.startReply(row)
         m.panelClosed()
         #expect(m.expanded == nil && m.focusedReply == nil)
+    }
+
+    /// Two items in one channel reply in two threads: each keeps its own draft, and sending one leaves the other.
+    @Test func twoItemsInOneChannelHaveTheirOwnDrafts() async {
+        let key = ItemKey(teamId: "T1", channelId: "C1")
+        let first = SlackTS.ts(ago(600)), second = SlackTS.ts(ago(60))
+        let snapshot = ConversationSnapshot(key: key, kind: .channel, title: "#eng", unread: [
+            SnapshotMessage(ts: first, authorId: "U2", author: "Marta Ruiz", text: "can I roll back?", mentionsMe: false),
+            SnapshotMessage(ts: second, authorId: "U3", author: "Tom", text: "PR ready for review", mentionsMe: false),
+        ], context: [], moreUnread: false)
+        let store = InboxStore()
+        store.setWorkspaces([lumen])
+        var update = SyncUpdate()
+        update.upsert(snapshot)
+        store.apply(update)
+        store.apply([TriageResult(key: key, newestTs: second, items: [
+            TriageItem(level: .action, lead: "Approve the rollback?", rest: "", reason: "", anchorTs: first, byAI: true),
+            TriageItem(level: .question, lead: "Review the PR?", rest: "", reason: "", anchorTs: second, byAI: true),
+        ])])
+        let (rollback, review) = (store.items[0], store.items[1])
+        let m = model()
+        m.drafts[rollback.id] = "Approved, go ahead"
+        #expect(m.drafts[review.id] == nil)
+        m.drafts[review.id] = "Looking now"
+        await m.send(rollback)
+        #expect(m.drafts[rollback.id] == nil && m.drafts[review.id] == "Looking now")
     }
 }

@@ -24,8 +24,8 @@ extension Actions: PanelActions {}
     public private(set) var expanded: InboxItem.ID?
     public private(set) var focusedReply: InboxItem.ID?
     public var commentsOpen = false
-    public var drafts: [ItemKey: String] = [:]   // kept when sending fails
-    public private(set) var sending: Set<ItemKey> = []   // replies on their way to Slack
+    public var drafts: [InboxItem.ID: String] = [:]   // per item: two items in a channel reply in two threads; kept when sending fails
+    public private(set) var sending: Set<InboxItem.ID> = []   // replies on their way to Slack
     public private(set) var toast: Toast?
 
     private let actions: PanelActions
@@ -74,13 +74,13 @@ extension Actions: PanelActions {}
 
     /// Enter in the reply field. The draft stays if sending fails; a second Enter while it's on its way does nothing.
     public func send(_ item: InboxItem) async {
-        guard let text = drafts[item.key], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !sending.contains(item.key) else { return }
-        sending.insert(item.key)
-        defer { sending.remove(item.key) }
+        guard let text = drafts[item.id], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !sending.contains(item.id) else { return }
+        sending.insert(item.id)
+        defer { sending.remove(item.id) }
         do {
             try await actions.reply(to: item, text: text)
-            drafts[item.key] = nil
+            drafts[item.id] = nil
             if expanded == item.id { expanded = nil }
             focusedReply = nil
         } catch {

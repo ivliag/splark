@@ -118,8 +118,8 @@ struct ReplyField: View {
 
     var body: some View {
         let palette = Palette(scheme)
-        let draft = Binding(get: { model.drafts[item.key] ?? "" }, set: { model.drafts[item.key] = $0 })
-        let ready = !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !model.sending.contains(item.key)
+        let draft = Binding(get: { model.drafts[item.id] ?? "" }, set: { model.drafts[item.id] = $0 })
+        let ready = !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !model.sending.contains(item.id)
         HStack(spacing: 6) {
             Group {
                 if isSnapshot {
