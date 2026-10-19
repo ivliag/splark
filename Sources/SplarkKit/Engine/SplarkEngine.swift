@@ -74,6 +74,7 @@ public struct ChatGPTAccount: Sendable, Equatable {
     /// `date == nil` waits for a poke.
     func wait(until date: Date?, now: Date) async {
         if poked { poked = false; return }
+        fire()   // one waiter at a time: never drop an earlier one
         generation += 1
         let mine = generation
         await withCheckedContinuation { continuation in
@@ -287,6 +288,7 @@ public final class SplarkEngine {
         state.sync[teamId] = nil
         state.userNames[teamId] = nil
         state.excludedChannels[teamId] = nil
+        inbox.setExcluded([], teamId: teamId)
         syncStatus[teamId] = nil
         inbox.setWorkspaces(state.workspaces)
         await save()
@@ -410,10 +412,13 @@ public final class SplarkEngine {
             if let due = await triage.nextFlush, due <= environment.now() {
                 triageState = .summarising(min(await triage.waitingCount, environment.triage.batchSize))
                 let results = await triage.flushIfDue()
+                guard !Task.isCancelled else { return }   // stopped (or reset) while the request was out
                 if !results.isEmpty { inbox.apply(results) }
             }
             triageState = await triage.state
-            await triageWakeup.wait(until: await triage.nextFlush, now: environment.now())
+            let next = await triage.nextFlush
+            guard !Task.isCancelled else { return }       // a stopped loop must not take a new loop's wake-up
+            await triageWakeup.wait(until: next, now: environment.now())
         }
     }
 

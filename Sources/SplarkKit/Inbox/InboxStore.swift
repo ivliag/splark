@@ -118,6 +118,7 @@ public final class InboxStore {
     public func clear() {
         snapshots = [:]
         results = [:]
+        excluded = [:]
         hidden = [:]
         repliedAt = [:]
         reactions = [:]

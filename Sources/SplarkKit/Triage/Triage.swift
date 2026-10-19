@@ -57,6 +57,7 @@ public actor Triage {
     private var usageLimitedUntil: Date?
     private var retryAt: Date?
     private var failures = 0
+    private var era = 0   // bumped by forgetAll, so a request from before it changes nothing
     private var inFlight = 0
 
     public init(llm: LLMClient?, config: Config = Config(), now: @escaping @Sendable () -> Date = { Date() }) {
@@ -82,7 +83,9 @@ public actor Triage {
     public func signedOut() { accountPause = .signedOut }
 
     /// Reset Splark: forget every conversation, summary and anything waiting, and the old account's limits and retries.
+    /// A request still out when this runs is dropped when it comes back.
     public func forgetAll() {
+        era += 1
         snapshots = [:]
         cache = [:]
         dirty = []
@@ -137,14 +140,17 @@ public actor Triage {
         let request = LLMRequest(instructions: TriagePrompt.instructions, input: input, schemaName: TriagePrompt.schemaName,
                                  schemaJSON: TriagePrompt.schemaJSON)
         let byKey = Dictionary(uniqueKeysWithValues: batch.map { ($0.key, $0) })
+        let started = era
         var parsed: [ItemKey: [TriageItem]]?
         do {
             for _ in 0..<2 where parsed == nil {   // an answer that isn't valid JSON is retried once
                 requestTimes.append(now())
                 let answer = try await llm.respond(request)
+                guard era == started else { return [] }
                 parsed = try? TriagePrompt.parse(answer, ids: ids, snapshots: byKey)
             }
         } catch {
+            guard era == started else { return [] }
             requeue(batch)
             switch error {
             case LLMError.signedOut: accountPause = .signedOut

@@ -12,6 +12,31 @@ import Testing
     return await condition()
 }
 
+/// An LLM whose first answer waits until `release()`: a summary request still out when something else happens.
+final class HeldLLM: LLMClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private var gate: CheckedContinuation<Void, Never>?
+    private var held = true
+    private let then: FakeLLM
+    init(then: FakeLLM) { self.then = then }
+
+    var waiting: Bool { lock.withLock { gate != nil } }
+
+    func respond(_ request: LLMRequest) async throws -> String {
+        if lock.withLock({ held }) { await withCheckedContinuation { continuation in lock.withLock { gate = continuation } } }
+        return try await then.respond(request)
+    }
+
+    func release() {
+        let gate = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            held = false
+            defer { self.gate = nil }
+            return self.gate
+        }
+        gate?.resume()
+    }
+}
+
 @MainActor @Suite struct SplarkEngineTests {
     let clock = ManualClock()
     let slack = FakeSlack()
@@ -61,6 +86,36 @@ import Testing
         let saved = stateStore.load()
         #expect(saved.sync["T1"]?.threads.watch(channelId: "C1", threadTs: ts(-3000)) != nil)
         #expect(saved.userNames["T1"]?["U2"]?.name == "Marta Ruiz")
+    }
+
+    /// Reset while a summary request is out, then set up again: summaries must carry on. The old triage loop used to
+    /// take the new one's wake-up when its request came back, and summaries stopped until relaunch.
+    @Test func summariesCarryOnAfterAResetMadeMidRequest() async throws {
+        let held = HeldLLM(then: FakeLLM.everything(.action))
+        let splark = try engine(llm: held)
+        splark.start()
+        #expect(await eventually { held.waiting })
+        try await splark.reset()
+        splark.start()
+        held.release()
+        try await Task.sleep(for: .milliseconds(200))   // the old request comes back and its loop goes to sleep
+        try await splark.connect(SlackConnection(workspace: lumen, credentials: credentials))
+        #expect(await eventually { splark.inbox.items.count == 3 && splark.inbox.items.allSatisfy(\.byAI) })
+        await splark.stop()
+    }
+
+    /// A channel excluded before Remove (or Reset) comes back when the workspace is connected again.
+    @Test func exclusionsGoWithTheWorkspace() async throws {
+        let splark = try engine()
+        splark.start()
+        #expect(await eventually { splark.inbox.items.count == 3 })
+        await splark.setExcluded(["C1"], teamId: "T1")
+        #expect(await eventually { splark.inbox.items.count == 1 })
+        try await splark.disconnect(teamId: "T1")
+        try await splark.connect(SlackConnection(workspace: lumen, credentials: credentials))
+        #expect(splark.excludedChannels(teamId: "T1").isEmpty)
+        #expect(await eventually { splark.inbox.items.count == 3 })
+        await splark.stop()
     }
 
     @Test func connectingAndDisconnectingAWorkspace() async throws {

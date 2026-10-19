@@ -123,8 +123,13 @@ func result(_ snapshot: ConversationSnapshot, _ items: [(TriageLevel, String)]) 
 
     @Test func clearEmptiesEverything() {
         let s = store([dm, chatter])
+        s.setExcluded([chatter.key.channelId], teamId: chatter.key.teamId)
         s.clear()
         #expect(s.items.isEmpty && s.summary.headline == "All caught up")
+        var update = SyncUpdate()
+        update.upsert(chatter)
+        s.apply(update)
+        #expect(s.items.count == 1)   // Reset forgets exclusions too: set up again, the channel shows
     }
 
     @Test func aConversationCanHoldTwoItems() {
