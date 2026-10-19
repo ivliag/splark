@@ -37,6 +37,11 @@ public enum Presenter {
     /// A clock time in the user's format: "14:05" or "2:05 PM".
     public static func clockTime(_ date: Date) -> String { date.formatted(date: .omitted, time: .shortened) }
 
+    /// While a row is hovered, beside its toolbar: "4m · #incidents", "40m · #marketing", "25m · Daniel Cho".
+    public static func hoverMetaLine(_ item: InboxItem, now: Date) -> String {
+        [shortTime(item.newest, now: now), item.title].joined(separator: " · ")
+    }
+
     /// "4m · #incidents", "40m · thread in #marketing · 👀", "2h · #help · Lumen Community", "25m · Daniel Cho · replied".
     public static func metaLine(_ item: InboxItem, now: Date) -> String {
         var parts = [shortTime(item.newest, now: now), item.source]

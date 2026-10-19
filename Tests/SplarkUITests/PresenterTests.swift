@@ -51,6 +51,14 @@ let community = Workspace(teamId: "T2", name: "Lumen Community", userId: "U9", u
         #expect(Presenter.shortTime(date, now: now) == date.formatted(.dateTime.day().month(.abbreviated)))
     }
 
+    /// Hovering a row puts its toolbar on the meta line. Where it came from stays beside it, short: the time and the
+    /// channel or person, without "thread in", the workspace, "replied" or reactions.
+    @Test func hoverMetaLines() {
+        #expect(Presenter.hoverMetaLine(item(), now: now) == "4m · #incidents")
+        #expect(Presenter.hoverMetaLine(item(kind: .thread, title: "#marketing", newest: 2400, reactions: [.eyes]), now: now) == "40m · #marketing")
+        #expect(Presenter.hoverMetaLine(item(kind: .dm, title: "Daniel Cho", team: "T2", newest: 1500, replied: true), now: now) == "25m · Daniel Cho")
+    }
+
     @Test func metaLines() {
         #expect(Presenter.metaLine(item(), now: now) == "4m · #incidents")
         #expect(Presenter.metaLine(item(kind: .thread, title: "#marketing", newest: 2400, reactions: [.eyes]), now: now) == "40m · thread in #marketing · 👀")

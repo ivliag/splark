@@ -1,9 +1,11 @@
 import SplarkKit
 import SwiftUI
 
-/// A small borderless button with the prototype's hover chip: the row toolbar's actions, "Open in Slack".
+/// A small borderless button with the prototype's hover chip: the row toolbar's actions, "Open in Slack". Compact in the
+/// hover toolbar, which shares its line with where the item came from.
 struct ChipButton<Label: View>: View {
     let help: String
+    var compact = false
     let action: () -> Void
     @ViewBuilder let label: () -> Label
     @Environment(\.colorScheme) private var scheme
@@ -17,8 +19,8 @@ struct ChipButton<Label: View>: View {
                 .fixedSize()
                 .font(Theme.font(11.5, .medium))
                 .foregroundStyle(hovering ? palette.text : palette.secondary)
-                .frame(minWidth: 24, minHeight: 22)
-                .padding(.horizontal, 5)
+                .frame(minWidth: compact ? 22 : 24, minHeight: 22)
+                .padding(.horizontal, compact ? 2 : 5)
                 .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? palette.chipHover : Ink(0, opacity: 0)))
                 .contentShape(Rectangle())
         }

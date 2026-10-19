@@ -116,7 +116,7 @@ import SwiftUI
         let catching = HeaderStatus(text: "Catching up… 120 of 300 conversations", working: true)
         return [
             ("panel", AnyView(PanelView(inbox: inbox, status: nil, model: model(), now: Fixtures.now, layout: .snapshot))),
-            ("panel-hover", AnyView(PanelView(inbox: inbox, status: nil, model: model(), now: Fixtures.now, forceHover: items[1].id))),
+            ("panel-hover", AnyView(PanelView(inbox: inbox, status: nil, model: model(), now: Fixtures.now, forceHover: items[2].id))),   // a thread in a channel: the widest toolbar, with Mute
             ("panel-expanded", AnyView(PanelView(inbox: inbox, status: nil, model: model(expand: items[0]), now: Fixtures.now, layout: .snapshot))),
             ("panel-comments", AnyView(PanelView(inbox: inbox, status: catching, model: model(comments: true), now: Fixtures.now, layout: .snapshot))),
             ("panel-toast", AnyView(PanelView(inbox: inbox, status: nil, model: model(toast: true), now: Fixtures.now, layout: .snapshot))),

@@ -31,6 +31,21 @@ import Testing
         #expect(try height(panel(inbox) { $0.commentsOpen = true }) > closed + 150)
     }
 
+    /// Hovering a row offers reply, the reactions, Open in Slack, and Mute when it comes from a channel.
+    @Test func hoveringOffersMuteForWhatComesFromAChannel() {
+        let everything: [InboxRowView.Action] = [.reply] + Reaction.allCases.map { .react($0) } + [.open, .mute]
+        #expect(InboxRowView.hoverActions(for: item()) == everything)
+        #expect(InboxRowView.hoverActions(for: item(kind: .thread, title: "#marketing")) == everything)
+        #expect(InboxRowView.hoverActions(for: item(kind: .dm, title: "Daniel Cho")) == everything.filter { $0 != .mute })
+    }
+
+    @Test func hoveringDoesntChangeARowsHeight() throws {
+        let inbox = Fixtures.inbox()
+        let model = PanelModel(actions: PreviewActions(), close: {}, openSlack: {}, openSettings: {})
+        let hovered = try height(PanelView(inbox: inbox, status: nil, model: model, now: Fixtures.now, forceHover: inbox.items[0].id))
+        #expect(hovered == (try height(panel(inbox))))
+    }
+
     @Test func theEmptyPanelIsShort() throws {
         #expect(try height(panel(Fixtures.emptyInbox())) < 160)
     }

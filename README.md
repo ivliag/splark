@@ -21,9 +21,9 @@ Splark needs macOS 14 or later. Summaries need a ChatGPT Plus or Pro plan; witho
 ## Using it
 
 - **The spark** is solid when something needs action, half-lit when questions are waiting, and faint when there's only chatter or nothing at all. The number next to it counts what needs you; turn it off in Settings → General.
-- **Click the spark** to open the panel. Hover a row to reply, react (👀 ✅ 👍), open it in Slack, or mark it as read (you can undo for 4 seconds). Click a row to read the messages and reply. Chatter is folded into "Just comments" at the bottom. Esc closes the panel.
+- **Click the spark** to open the panel. Hover a row to reply, react (👀 ✅ 👍), open it in Slack, mute its channel, or mark it as read (you can undo for 4 seconds). Click a row to read the messages and reply. Chatter is folded into "Just comments" at the bottom. Esc closes the panel.
 - **Right-click the spark** (or ⌥- or ⌃-click it) for Refresh now, Settings…, Pause summaries and Quit.
-- **Muting a channel:** Slack doesn't tell apps which channels you've muted there, so Splark keeps its own list. Open a channel's message in the panel and click **Mute** (Undo is there for 4 seconds), or tick channels in Settings → Slack → **Channels…**.
+- **Muting a channel:** Slack doesn't tell apps which channels you've muted there, so Splark keeps its own list. Hover a channel's message in the panel and click Mute (the crossed-out speaker), or open the message and click **Mute** (Undo is there for 4 seconds), or tick channels in Settings → Slack → **Channels…**.
 - **Settings** manages workspaces (reconnect, finish connecting after an admin's approval, muted channels, remove), ChatGPT (account, model, pause), open at login, and Reset Splark.
 
 ## What Splark sends, and where

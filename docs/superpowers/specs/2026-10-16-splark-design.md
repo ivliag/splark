@@ -115,7 +115,7 @@ The layout is the prototype's activity-log style.
   - **Meta line:** `time · source`, where source is the DM partner's name, `#channel`, or `thread in #channel`. The workspace name is appended only for workspaces other than the first one connected.
   - **Summary:** a bold lead (up to ~8 words) then the rest (up to ~20 words), clamped to 2 lines.
   - **Hover:**
-    - A toolbar replaces the meta line: Reply, 👀, ✅, 👍, Open in Slack.
+    - A toolbar joins the meta line, which shortens to `time · #channel` or `time · name` beside it so where the item came from stays visible: Reply, 👀, ✅, 👍, Open in Slack, and Mute for a channel or channel thread.
     - A separate ✓ circle at the right edge marks the conversation as read in Slack.
   - **Click to expand:**
     - The original unread messages (author · time, then text; up to the last 10, with "and N earlier" above).

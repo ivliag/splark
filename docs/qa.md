@@ -32,7 +32,7 @@ Go through this on a real Mac before tagging a release: macOS 26 for Liquid Glas
 
 - [ ] A click on the spark opens the panel under it, as tall as its content, on glass (macOS 26) or frosted material (macOS 14–15). A second click closes it.
 - [ ] With many items, it stops at 70% of the screen and scrolls.
-- [ ] Hover a row: the toolbar replaces the meta line. 👀 adds a reaction and shows it in the meta line; check that it appears in Slack.
+- [ ] Hover a row: the toolbar joins the meta line, and the channel or person stays visible beside it. A channel's row has Mute; a DM's doesn't. 👀 adds a reaction and shows it in the meta line; check that it appears in Slack.
 - [ ] Click a row: the messages and a reply field. Type a reply and press Enter: it's sent (check Slack), and the row shows "replied". Esc collapses the row, and a second Esc closes the panel.
 - [ ] Reply with Wi-Fi off: "Couldn't send. Try again", and the text is still there.
 - [ ] Mark a row read with the ✓ circle: it goes, with "Marked as read" and **Undo** for 4 seconds. Undo brings it back and Slack still shows it unread. Without undo, Slack shows it read after the toast.

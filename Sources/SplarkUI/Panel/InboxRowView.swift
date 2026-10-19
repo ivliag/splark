@@ -2,8 +2,8 @@ import SplarkKit
 import SwiftUI
 
 /// One row of the panel (spec §4.3, the prototype's activity-log style): the spark at the item's level, a quiet
-/// "time · source" line, then a bold lead and the rest. Hover swaps the meta line for a toolbar and shows ✓; a click opens
-/// the messages, a reply field and reactions.
+/// "time · source" line, then a bold lead and the rest. Hover puts a toolbar on the meta line, beside where the item came
+/// from, and shows ✓; a click opens the messages, a reply field and reactions.
 struct InboxRowView: View {
     let item: InboxItem
     let model: PanelModel
@@ -12,6 +12,16 @@ struct InboxRowView: View {
 
     @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
+
+    /// The hover toolbar's buttons.
+    enum Action: Hashable {
+        case reply, react(Reaction), open, mute
+    }
+
+    /// Reply, the reactions, Open in Slack, and Mute for what comes from a channel.
+    static func hoverActions(for item: InboxItem) -> [Action] {
+        [.reply] + Reaction.allCases.map { .react($0) } + [.open] + (item.canMute ? [.mute] : [])
+    }
 
     private var expanded: Bool { model.expanded == item.id }
     private var showToolbar: Bool { (hovering || forceHover) && !expanded }
@@ -25,13 +35,17 @@ struct InboxRowView: View {
                     .frame(width: 11, height: 16)
                     .help(item.reason)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(Presenter.metaLine(item, now: now))
-                        .font(Theme.font(11.5))
-                        .foregroundStyle(palette.tertiary)
-                        .lineLimit(1)
-                        .frame(height: 16, alignment: .leading)
-                        .opacity(showToolbar ? 0 : 1)
-                        .overlay(alignment: .topLeading) { if showToolbar { toolbar.offset(x: -5, y: -4) } }
+                    HStack(spacing: 6) {
+                        Text(showToolbar ? Presenter.hoverMetaLine(item, now: now) : Presenter.metaLine(item, now: now))
+                            .font(Theme.font(11.5))
+                            .foregroundStyle(palette.tertiary)
+                            .lineLimit(1)
+                        if showToolbar {
+                            Spacer(minLength: 0)
+                            toolbar.fixedSize()
+                        }
+                    }
+                    .frame(height: 16, alignment: .leading)
                     summary(palette)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,12 +73,23 @@ struct InboxRowView: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 1) {
-            ChipButton(help: "Reply", action: { model.startReply(item) }) { Image(systemName: "arrowshape.turn.up.left").font(.system(size: 11.5)) }
-            reactions
-            ChipButton(help: "Open in Slack", action: { Task { await model.open(item) } }) { Image(systemName: "arrow.up.forward.square").font(.system(size: 11.5)) }
+        HStack(spacing: 0) {
+            ForEach(Self.hoverActions(for: item), id: \.self) { action in
+                switch action {
+                case .reply:
+                    ChipButton(help: "Reply", compact: true, action: { model.startReply(item) }) { Image(systemName: "arrowshape.turn.up.left").font(.system(size: 11.5)) }
+                case .react(let reaction):
+                    ChipButton(help: "React \(reaction.emoji)", compact: true, action: { Task { await model.react(item, reaction) } }) { Text(reaction.emoji).font(.system(size: 13)) }
+                case .open:
+                    ChipButton(help: "Open in Slack", compact: true, action: { Task { await model.open(item) } }) { Image(systemName: "arrow.up.forward.square").font(.system(size: 11.5)) }
+                case .mute:
+                    ChipButton(help: muteHelp, compact: true, action: { Task { await model.mute(item) } }) { Image(systemName: "speaker.slash").font(.system(size: 11)) }
+                }
+            }
         }
     }
+
+    private var muteHelp: String { "Mute \(item.title) in Splark: it leaves the panel from now on" }
 
     private var reactions: some View {
         ForEach(Reaction.allCases, id: \.self) { reaction in
@@ -100,7 +125,7 @@ struct InboxRowView: View {
                     }
                 }
                 if item.canMute {
-                    ChipButton(help: "Mute \(item.title) in Splark: it leaves the panel from now on", action: { Task { await model.mute(item) } }) {
+                    ChipButton(help: muteHelp, action: { Task { await model.mute(item) } }) {
                         HStack(spacing: 4) {
                             Image(systemName: "speaker.slash").font(.system(size: 11))
                             Text("Mute")
