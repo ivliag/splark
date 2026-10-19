@@ -3,6 +3,16 @@ import SwiftUI
 import Testing
 @testable import SplarkUI
 
+/// Reports a size from inside its own layout, as SwiftUI's geometry actions do in the live panel.
+final class ReportsSizeInLayout: NSView {
+    var report: (() -> Void)?
+    override func layout() {
+        super.layout()
+        report?()
+        report = nil
+    }
+}
+
 @MainActor @Suite struct PanelControllerTests {
     let screen = NSRect(x: 0, y: 0, width: 1512, height: 944)          // visible frame, below a 38 pt menu bar
     let spark = NSRect(x: 1200, y: 945, width: 40, height: 24)          // the status item, in the menu bar
@@ -46,8 +56,8 @@ import Testing
     }
 
     /// The spark's frame doesn't stay put while the panel is open: with a second display it can follow the active menu
-    /// bar, and other menu-bar items push it along. Opening or closing "Just comments" resizes the panel, which then
-    /// jumped off the top of an external display. It keeps the spot it opened at until it closes.
+    /// bar, and other menu-bar items push it along. A resize while open ("Just comments" opening) keeps the spot the panel
+    /// opened at; the next opening goes under the spark wherever it is then.
     @Test func resizingWhileOpenKeepsTheSpotItOpenedAt() {
         let external = NSRect(x: -191, y: 982, width: 1920, height: 1050)    // visible frame of a display above the laptop
         var spark = NSRect(x: 1000, y: 2036, width: 45, height: 22)
@@ -120,24 +130,58 @@ import Testing
         #expect(background.frame.size == controller.window.frame.size)
     }
 
-    /// With a second display the spark can follow the active menu bar while the panel is open. A resize then ("Just
-    /// comments" opening) must keep the panel where it opened, not jump to the other screen's menu bar.
-    @Test func whileOpenItStaysWhereItOpened() {
+    /// On macOS 26 the glass brings Auto Layout into the panel: a view inside it holds its height at 10 pt, more firmly
+    /// than a window holds its own size. Nothing told the layout the panel's size, so AppKit resized the panel to fit, or
+    /// laid the glass and content out at 10 pt inside it; closing "Just comments" sent the panel up off the top of the
+    /// screen. The content is pinned to the frame the panel is given.
+    @Test func constraintsInsideTheContentDontResizeThePanel() throws {
         _ = NSApplication.shared
-        let laptop = NSRect(x: 0, y: 0, width: 1512, height: 944)
-        let external = NSRect(x: 0, y: 982, width: 1920, height: 1050)
-        var spark = NSRect(x: 1200, y: 945, width: 40, height: 24)
-        var screen = laptop
-        let controller = PanelController(anchor: { spark }, screen: { screen })
-        controller.contentSizeChanged(CGSize(width: 372, height: 300))
+        let controller = PanelController(anchor: { NSRect(x: 900, y: 955, width: 45, height: 22) }, screen: { NSRect(x: 0, y: 0, width: 1512, height: 949) })
+        controller.setContent(Color.clear)
+        controller.contentSizeChanged(CGSize(width: 372, height: 400))
         controller.show()
         defer { controller.close() }
-        let opened = controller.window.frame
-        spark = NSRect(x: 1000, y: 2036, width: 40, height: 22)
-        screen = external
-        controller.contentSizeChanged(CGSize(width: 372, height: 420))
-        #expect(controller.window.frame.maxY == opened.maxY && controller.window.frame.midX == opened.midX)
-        #expect(controller.window.frame.height == 420)
+        let content = try #require(controller.window.contentView)
+        let glassLike = NSView()
+        glassLike.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(glassLike)
+        let small = glassLike.heightAnchor.constraint(equalToConstant: 10)
+        small.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            glassLike.topAnchor.constraint(equalTo: content.topAnchor), glassLike.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            glassLike.leadingAnchor.constraint(equalTo: content.leadingAnchor), glassLike.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            small,
+        ])
+        for height: CGFloat in [121, 378, 121] {
+            controller.contentSizeChanged(CGSize(width: 372, height: height))
+            controller.window.layoutIfNeeded()
+            #expect(controller.window.frame.maxY == 955 - 6 && controller.window.frame.height == height)
+            #expect(content.frame.size == controller.window.frame.size && glassLike.frame.height == height)
+        }
+    }
+
+    /// SwiftUI reports the content's new size from inside the window's layout pass. Resizing the window right there and
+    /// displaying it straight away ran a second layout inside the first, which still had the old height: opening "Just
+    /// comments" moved the panel down by what it grew, and closing it moved it up.
+    @Test func aSizeReportedDuringLayoutKeepsThePanelUnderTheSpark() throws {
+        _ = NSApplication.shared
+        let controller = PanelController(anchor: { NSRect(x: 900, y: 955, width: 45, height: 22) }, screen: { NSRect(x: 0, y: 0, width: 1512, height: 949) })
+        controller.setContent(Color.clear)
+        controller.contentSizeChanged(CGSize(width: 372, height: 121))
+        controller.show()
+        defer { controller.close() }
+        let content = try #require(controller.window.contentView)
+        let reporter = ReportsSizeInLayout()
+        reporter.autoresizingMask = [.width, .height]
+        reporter.frame = content.bounds
+        content.addSubview(reporter)
+        for height: CGFloat in [378, 121, 378] {
+            reporter.report = { controller.contentSizeChanged(CGSize(width: 372, height: height)) }
+            reporter.needsLayout = true
+            controller.window.layoutIfNeeded()
+            controller.window.displayIfNeeded()
+            #expect(controller.window.frame.maxY == 955 - 6 && controller.window.frame.height == height, "\(height)")
+        }
     }
 
     static func hostingView(in view: NSView) -> NSView? {

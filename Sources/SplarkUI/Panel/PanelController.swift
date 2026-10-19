@@ -45,9 +45,12 @@ final class SparkPanel: NSPanel {
     private let screen: () -> NSRect
     private var contentSize = CGSize(width: Theme.panelWidth, height: 200)
     /// Where the panel opened: the spark and screen at that moment, kept until it closes. Asked again on a resize, the
-    /// spark could be somewhere else by then (with a second display it can follow the active menu bar), which sent the
-    /// panel off the top of the screen when "Just comments" opened or closed.
+    /// spark could be somewhere else by then: with a second display it can follow the active menu bar.
     private var placement: (anchor: NSRect?, screen: NSRect)?
+    /// The content's size for Auto Layout, kept to the panel's frame. On macOS 26 the glass brings constraints into the
+    /// panel (a view inside it holds its height at 10 pt, more firmly than a window holds its own size). Without these,
+    /// AppKit worked the panel's size out from those, resizing the panel or laying its content out at 10 pt.
+    private var pinnedSize: (width: NSLayoutConstraint, height: NSLayoutConstraint)?
     private var mouseMonitor: Any?
     private var activationObserver: NSObjectProtocol?
 
@@ -64,7 +67,11 @@ final class SparkPanel: NSPanel {
     public func setContent<Content: View>(_ content: Content) {
         let hosting = NSHostingView(rootView: content)
         hosting.sizingOptions = []
-        window.contentView = Self.background(around: hosting)
+        let background = Self.background(around: hosting)
+        let size = window.frame.size
+        pinnedSize = (background.widthAnchor.constraint(equalToConstant: size.width), background.heightAnchor.constraint(equalToConstant: size.height))
+        pinnedSize.map { NSLayoutConstraint.activate([$0.width, $0.height]) }
+        window.contentView = background   // the content reports its size here, through `place`
     }
 
     public var maxContentHeight: CGFloat { Self.maxContentHeight(in: screen()) }
@@ -77,7 +84,7 @@ final class SparkPanel: NSPanel {
         let placement = (anchor: anchor(), screen: screen())
         self.placement = placement
         layout.maxHeight = Self.maxContentHeight(in: placement.screen)
-        window.setFrame(Self.frame(for: contentSize, under: placement.anchor, in: placement.screen), display: false)
+        place(Self.frame(for: contentSize, under: placement.anchor, in: placement.screen))
         window.orderFrontRegardless()
         window.makeKey()
         // A click in another app, or another app coming forward, closes the panel.
@@ -106,7 +113,16 @@ final class SparkPanel: NSPanel {
     public func contentSizeChanged(_ size: CGSize) {
         contentSize = size
         let placement = placement ?? (anchor: anchor(), screen: screen())
-        window.setFrame(Self.frame(for: size, under: placement.anchor, in: placement.screen), display: isShown)
+        place(Self.frame(for: size, under: placement.anchor, in: placement.screen))
+    }
+
+    /// Tells Auto Layout the new size, then moves the window without displaying it. SwiftUI reports sizes from inside the
+    /// window's layout pass; displaying here ran a second layout inside the first, which still had the old height and put
+    /// the panel back to it from the new position. The window draws in its next display pass instead.
+    private func place(_ frame: NSRect) {
+        pinnedSize?.width.constant = frame.width
+        pinnedSize?.height.constant = frame.height
+        window.setFrame(frame, display: false)
     }
 
     // MARK: Geometry
@@ -119,13 +135,14 @@ final class SparkPanel: NSPanel {
 
     static func maxContentHeight(in screen: NSRect) -> CGFloat { (screen.height * Theme.panelMaxScreenFraction).rounded(.down) }
 
-    /// Centred under the spark, 6 pt below it, inside the screen with an 8 pt margin; top right without a spark.
+    /// Centred under the spark, 6 pt below it, inside the screen with an 8 pt margin; top right without a spark. In whole
+    /// points, as AppKit would round it, so the frame the window takes is the one the content is pinned to.
     static func frame(for size: CGSize, under anchor: NSRect?, in screen: NSRect) -> NSRect {
-        let height = min(size.height, maxContentHeight(in: screen))
-        let width = size.width
-        let top = (anchor?.minY ?? screen.maxY) - 6
+        let height = min(size.height.rounded(.up), maxContentHeight(in: screen))
+        let width = size.width.rounded(.up)
+        let top = ((anchor?.minY ?? screen.maxY) - 6).rounded(.down)
         let centredX = anchor.map { $0.midX - width / 2 } ?? screen.maxX - 8 - width
-        let x = min(max(centredX, screen.minX + 8), screen.maxX - 8 - width)
+        let x = min(max(centredX, screen.minX + 8), screen.maxX - 8 - width).rounded(.down)
         return NSRect(x: x, y: top - height, width: width, height: height)
     }
 
