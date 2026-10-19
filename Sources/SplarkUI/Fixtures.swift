@@ -119,3 +119,42 @@ import SwiftUI
         ]
     }
 }
+
+/// Setup services that do nothing: for previews and renders.
+@MainActor final class PreviewSetupServices: SetupServices {
+    func createApp(configToken: String) async throws -> SlackAppRegistration { SlackAppRegistration(appId: nil, clientId: "", redirectPort: 0) }
+    func authorize(_ app: SlackAppRegistration) async throws -> SlackConnection { throw WorkspaceSetupError.cancelled }
+    func connect(userToken: String) async throws -> SlackConnection { throw WorkspaceSetupError.cancelled }
+    func added(_ connection: SlackConnection) async throws {}
+    func waitingForApproval(_ app: SlackAppRegistration) async {}
+    func signInToChatGPT() async throws -> ChatGPTAccount { throw WorkspaceSetupError.cancelled }
+    func open(_ url: URL) {}
+    func setOpenAtLogin(_ on: Bool) {}
+    func setShowCount(_ on: Bool) {}
+    func finish() {}
+}
+
+/// Every setup step and state worth looking at.
+@MainActor public enum SetupGallery {
+    public static func states() -> [(name: String, view: AnyView)] {
+        func view(_ configure: (SetupModel) -> Void) -> AnyView {
+            let model = SetupModel(services: PreviewSetupServices())
+            configure(model)
+            return AnyView(SetupView(model: model))
+        }
+        let lumen = [Fixtures.workspaces[0]]
+        let rejected = SetupModel.message(for: WorkspaceSetupError.tokenRejected("token_expired"))
+        return [
+            ("setup-welcome", view { $0.preview(step: .welcome) }),
+            ("setup-slack", view { $0.preview(step: .slack) }),
+            ("setup-slack-error", view { $0.token = "xoxe.xoxp-1-2026…"; $0.preview(step: .slack, slack: .failed(rejected)) }),
+            ("setup-slack-allow", view { $0.preview(step: .slack, slack: .waitingForAllow) }),
+            ("setup-slack-connected", view { $0.preview(step: .slack, slack: .connected, connected: lumen) }),
+            ("setup-slack-approval", view { $0.preview(step: .slack, slack: .waitingForApproval) }),
+            ("setup-slack-manual", view { $0.preview(step: .slack, slack: .manual) }),
+            ("setup-chatgpt", view { $0.preview(step: .chatgpt, connected: lumen) }),
+            ("setup-chatgpt-done", view { $0.preview(step: .chatgpt, connected: lumen, chatgpt: .signedIn(ChatGPTAccount(email: "ivan@lumen.dev", canUsePlan: true))) }),
+            ("setup-done", view { $0.preview(step: .done, connected: lumen) }),
+        ]
+    }
+}
