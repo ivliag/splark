@@ -120,6 +120,26 @@ import Testing
         #expect(background.frame.size == controller.window.frame.size)
     }
 
+    /// With a second display the spark can follow the active menu bar while the panel is open. A resize then ("Just
+    /// comments" opening) must keep the panel where it opened, not jump to the other screen's menu bar.
+    @Test func whileOpenItStaysWhereItOpened() {
+        _ = NSApplication.shared
+        let laptop = NSRect(x: 0, y: 0, width: 1512, height: 944)
+        let external = NSRect(x: 0, y: 982, width: 1920, height: 1050)
+        var spark = NSRect(x: 1200, y: 945, width: 40, height: 24)
+        var screen = laptop
+        let controller = PanelController(anchor: { spark }, screen: { screen })
+        controller.contentSizeChanged(CGSize(width: 372, height: 300))
+        controller.show()
+        defer { controller.close() }
+        let opened = controller.window.frame
+        spark = NSRect(x: 1000, y: 2036, width: 40, height: 22)
+        screen = external
+        controller.contentSizeChanged(CGSize(width: 372, height: 420))
+        #expect(controller.window.frame.maxY == opened.maxY && controller.window.frame.midX == opened.midX)
+        #expect(controller.window.frame.height == 420)
+    }
+
     static func hostingView(in view: NSView) -> NSView? {
         if String(describing: type(of: view)).hasPrefix("NSHostingView") { return view }
         return view.subviews.lazy.compactMap { hostingView(in: $0) }.first

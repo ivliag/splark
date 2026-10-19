@@ -44,6 +44,10 @@ final class SparkPanel: NSPanel {
     private let anchor: () -> NSRect?
     private let screen: () -> NSRect
     private var contentSize = CGSize(width: Theme.panelWidth, height: 200)
+    /// Where the panel opened: the spark and screen at that moment, kept until it closes. Asked again on a resize, the
+    /// spark could be somewhere else by then (with a second display it can follow the active menu bar), which sent the
+    /// panel off the top of the screen when "Just comments" opened or closed.
+    private var placement: (anchor: NSRect?, screen: NSRect)?
     private var mouseMonitor: Any?
     private var activationObserver: NSObjectProtocol?
 
@@ -70,8 +74,10 @@ final class SparkPanel: NSPanel {
     public func show() {
         guard !isShown else { return }
         isShown = true
-        layout.maxHeight = maxContentHeight
-        window.setFrame(Self.frame(for: contentSize, under: anchor(), in: screen()), display: false)
+        let placement = (anchor: anchor(), screen: screen())
+        self.placement = placement
+        layout.maxHeight = Self.maxContentHeight(in: placement.screen)
+        window.setFrame(Self.frame(for: contentSize, under: placement.anchor, in: placement.screen), display: false)
         window.orderFrontRegardless()
         window.makeKey()
         // A click in another app, or another app coming forward, closes the panel.
@@ -87,6 +93,7 @@ final class SparkPanel: NSPanel {
     public func close() {
         guard isShown else { return }
         isShown = false
+        placement = nil
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
         if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
         mouseMonitor = nil
@@ -95,11 +102,11 @@ final class SparkPanel: NSPanel {
         onClose?()
     }
 
-    /// The content's natural size changed: follow it, keeping the top edge under the spark.
+    /// The content's natural size changed: follow it, keeping the top edge where the panel opened.
     public func contentSizeChanged(_ size: CGSize) {
         contentSize = size
-        let frame = Self.frame(for: size, under: anchor(), in: screen())
-        window.setFrame(frame, display: isShown)
+        let placement = placement ?? (anchor: anchor(), screen: screen())
+        window.setFrame(Self.frame(for: size, under: placement.anchor, in: placement.screen), display: isShown)
     }
 
     // MARK: Geometry
