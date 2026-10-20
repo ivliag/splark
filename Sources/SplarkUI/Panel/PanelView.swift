@@ -110,16 +110,16 @@ public struct PanelView: View {
             VStack(spacing: 0) {
                 Rectangle().fill(palette.separator).frame(height: 0.5).padding(.horizontal, 0)
                 HStack(spacing: 11) {
-                    Color.clear.frame(width: 11, height: 1)
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .semibold))
-                            .rotationEffect(.degrees(model.commentsOpen ? 90 : 0))
-                        (Text("Just comments").font(Theme.font(11.5, .semibold)).foregroundColor(palette.secondary.color)
-                         + Text(" · \(comments.count) conversation\(comments.count == 1 ? "" : "s")").font(Theme.font(11.5)))
-                    }
-                    .foregroundStyle(palette.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // The chevron sits in the rows' spark column, so "Just comments" lines up with their text.
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .rotationEffect(.degrees(model.commentsOpen ? 90 : 0))
+                        .frame(width: 11)
+                        .foregroundStyle(palette.tertiary)
+                    (Text("Just comments").font(Theme.font(11.5, .semibold)).foregroundColor(palette.secondary.color)
+                     + Text(" · \(comments.count) conversation\(comments.count == 1 ? "" : "s")").font(Theme.font(11.5)))
+                        .foregroundStyle(palette.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     ReadButton(help: "Mark all as read in Slack", double: true) { model.markAllRead(comments) }
                         .opacity(hoveringComments ? 1 : 0)
                 }
