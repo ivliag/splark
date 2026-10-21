@@ -70,7 +70,10 @@ public actor SlackTokenManager: SlackTokenSource {
     private let store: SecretStore
     private let refresher: Refresher
     private let now: @Sendable () -> Date
-    private var inFlight: Task<SlackCredentials, Error>?
+    private var inFlight: Task<(credentials: SlackCredentials, saved: Bool), Error>?
+    /// Refreshed tokens the Keychain didn't take yet. Slack has already stopped accepting the old refresh token, so these
+    /// are kept and used, and saved at the next chance.
+    private var unsaved = false
 
     public init(credentials: SlackCredentials, store: SecretStore,
                 refresher: @escaping Refresher = { try await SlackClient(token: nil).oauthV2Refresh(clientId: $0, refreshToken: $1) },
@@ -82,15 +85,22 @@ public actor SlackTokenManager: SlackTokenSource {
     }
 
     public func accessToken() async throws -> String {
-        credentials.needsRefresh(now: now()) ? try await refresh().accessToken : credentials.accessToken
+        if credentials.needsRefresh(now: now()) { return try await refresh().accessToken }
+        saveIfUnsaved()
+        return credentials.accessToken
     }
 
     public func refreshAfterRejection(of token: String) async throws -> String {
         token == credentials.accessToken ? try await refresh().accessToken : credentials.accessToken
     }
 
+    private func saveIfUnsaved() {
+        guard unsaved, (try? credentials.save(to: store)) != nil else { return }
+        unsaved = false
+    }
+
     private func refresh() async throws -> SlackCredentials {
-        if let inFlight { return try await inFlight.value }
+        if let inFlight { return try await inFlight.value.credentials }
         guard let clientId = credentials.clientId, let refreshToken = credentials.refreshToken else {
             throw SlackError.refreshFailed("no_refresh_token")
         }
@@ -99,19 +109,25 @@ public actor SlackTokenManager: SlackTokenSource {
             do { response = try await refresher(clientId, refreshToken) }
             catch SlackError.api(let code) where Self.refusals.contains(code) { throw SlackError.refreshFailed(code) }
             guard let token = response.userAccessToken else { throw SlackError.api("no_token_in_response") }
-            // Disconnected or reconnected while we waited? Then what's stored now wins.
-            guard let stored = try SlackCredentials.load(teamId: credentials.teamId, from: store) else { throw SlackError.refreshFailed("disconnected") }
-            guard stored.refreshToken == refreshToken else { return stored }
+            // Disconnected or reconnected while we waited? Then what's stored now wins. A Keychain that can't be read
+            // doesn't say either way, and Slack has already moved on from the old refresh token: the new tokens stand.
+            let stored: SlackCredentials??
+            do { stored = .some(try SlackCredentials.load(teamId: credentials.teamId, from: store)) } catch { stored = .none }
+            if case .some(let found) = stored {
+                guard let found else { throw SlackError.refreshFailed("disconnected") }
+                guard found.refreshToken == refreshToken else { return (credentials: found, saved: true) }
+            }
             var updated = credentials
             updated.accessToken = token
             updated.refreshToken = response.userRefreshToken ?? refreshToken
             updated.expiresAt = response.userExpiresIn.map { now().addingTimeInterval(TimeInterval($0)) }
-            try updated.save(to: store)
-            return updated
+            return (credentials: updated, saved: (try? updated.save(to: store)) != nil)
         }
         inFlight = task
         defer { inFlight = nil }
-        credentials = try await task.value
+        let refreshed = try await task.value
+        credentials = refreshed.credentials
+        unsaved = !refreshed.saved
         return credentials
     }
 }

@@ -94,6 +94,48 @@ import Testing
         #expect(calls.all.count == 1)
     }
 
+    /// A Keychain that can't be read or written for a while: locked, or refusing a new build of the app.
+    final class FlakyStore: SecretStore, @unchecked Sendable {
+        let inner: InMemorySecretStore
+        private let lock = NSLock()
+        private var _failing = false
+        var failing: Bool { get { lock.withLock { _failing } } set { lock.withLock { _failing = newValue } } }
+        init(_ inner: InMemorySecretStore) { self.inner = inner }
+        func read(_ key: String) throws -> String? { if failing { throw CocoaError(.fileReadNoPermission) }; return try inner.read(key) }
+        func write(_ value: String, for key: String) throws { if failing { throw CocoaError(.fileWriteNoPermission) }; try inner.write(value, for: key) }
+        func delete(_ key: String) throws { try inner.delete(key) }
+    }
+
+    final class Clock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: Date
+        init(_ value: Date) { self.value = value }
+        var now: Date { get { lock.withLock { value } } set { lock.withLock { value = newValue } } }
+    }
+
+    /// Slack hands out a new refresh token with each refresh and stops taking the old one. When the Keychain couldn't save
+    /// the new tokens, they were dropped, and the next refresh, with the old token, was refused: the workspace stopped
+    /// syncing until reconnected (live run). The new tokens stay in use and are saved at the next chance.
+    @Test func newTokensSurviveAKeychainThatWontKeepThem() async throws {
+        let store = FlakyStore(connected(creds(expiresIn: 60)))
+        let clock = Clock(start)
+        let manager = SlackTokenManager(credentials: creds(expiresIn: 60), store: store, refresher: { _, r in
+            switch r {
+            case "xoxe-1-r1": return refresh("xoxe.xoxp-a2", "xoxe-1-r2")
+            case "xoxe-1-r2": return refresh("xoxe.xoxp-a3", "xoxe-1-r3")
+            default: throw SlackError.api("invalid_refresh_token")   // used already
+            }
+        }, now: { clock.now })
+        store.failing = true
+        #expect(try await manager.accessToken() == "xoxe.xoxp-a2")
+        store.failing = false
+        #expect(try await manager.accessToken() == "xoxe.xoxp-a2")
+        #expect(try SlackCredentials.load(teamId: "T1", from: store.inner)?.refreshToken == "xoxe-1-r2")   // saved at the next chance
+        clock.now = start.addingTimeInterval(43200)
+        store.failing = true
+        #expect(try await manager.accessToken() == "xoxe.xoxp-a3")
+    }
+
     @Test func aRefusedRefreshMeansReconnect() async {
         let manager = SlackTokenManager(credentials: creds(expiresIn: 60), store: InMemorySecretStore(),
                                         refresher: { _, _ in throw SlackError.api("invalid_refresh_token") }, now: { start })
