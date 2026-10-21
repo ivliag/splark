@@ -52,6 +52,7 @@ public struct TriageReader: Sendable, Equatable {
 public enum TriagePrompt {
     public static let schemaName = "slack_triage"
     static let leadWords = 10, restWords = 24, reasonWords = 12   // the spec's 8 / 20 / 10, with a little slack
+    static let leadCharacters = 80, restCharacters = 200, reasonCharacters = 100   // for text without spaces (Chinese, Japanese)
     static let maxMessages = 20, maxMessageCharacters = 1000
 
     public static let instructions = """
@@ -138,11 +139,11 @@ public enum TriagePrompt {
         var byKey: [ItemKey: [TriageItem]] = [:]
         for raw in decoded.items {
             guard let key = ids[raw.conversation_id], let snapshot = snapshots[key], let level = TriageLevel(rawValue: raw.level) else { continue }
-            let lead = clamp(raw.lead, words: leadWords)
+            let lead = clamp(raw.lead, words: leadWords, characters: leadCharacters)
             guard !lead.isEmpty else { continue }
             let anchor = snapshot.unread.contains { $0.ts == raw.anchor_ts } ? raw.anchor_ts : snapshot.newestTs
-            byKey[key, default: []].append(TriageItem(level: level, lead: lead, rest: clamp(raw.rest, words: restWords),
-                                                      reason: clamp(raw.reason, words: reasonWords), anchorTs: anchor, byAI: true))
+            byKey[key, default: []].append(TriageItem(level: level, lead: lead, rest: clamp(raw.rest, words: restWords, characters: restCharacters),
+                                                      reason: clamp(raw.reason, words: reasonWords, characters: reasonCharacters), anchorTs: anchor, byAI: true))
         }
         return byKey.mapValues { items in
             let needs = items.enumerated().sorted { ($0.element.level, $0.offset) < ($1.element.level, $1.offset) }.map(\.element).filter { $0.level != .fyi }
@@ -155,15 +156,16 @@ public enum TriagePrompt {
     public static func heuristic(_ snapshot: ConversationSnapshot) -> TriageItem {
         let newest = snapshot.unread[snapshot.unread.count - 1]
         let words = newest.text.split(whereSeparator: \.isWhitespace).map(String.init)
-        let lead = words.isEmpty ? "New message from \(newest.author)" : words.prefix(8).joined(separator: " ")
-        let rest = clamp(words.dropFirst(8).joined(separator: " "), words: 20)
+        let lead = words.isEmpty ? "New message from \(newest.author)" : clamp(words.prefix(8).joined(separator: " "), words: 8, characters: leadCharacters)
+        let rest = clamp(words.dropFirst(8).joined(separator: " "), words: 20, characters: restCharacters)
         return TriageItem(level: snapshot.isDirect ? .question : .fyi, lead: lead, rest: rest,
                           reason: snapshot.isDirect ? "Sent to you" : "Channel activity", anchorTs: newest.ts, byAI: false)
     }
 
-    static func clamp(_ text: String, words limit: Int) -> String {
+    static func clamp(_ text: String, words limit: Int, characters: Int) -> String {
         let words = text.split(whereSeparator: \.isWhitespace)
-        return words.count > limit ? words.prefix(limit).joined(separator: " ") + "…" : words.joined(separator: " ")
+        let clamped = words.count > limit ? words.prefix(limit).joined(separator: " ") + "…" : words.joined(separator: " ")
+        return clamped.count > characters ? String(clamped.prefix(characters)) + "…" : clamped
     }
 
     static func ago(_ date: Date, now: Date) -> String {

@@ -181,6 +181,17 @@ func storeWith(_ credentials: ChatGPTCredentials) -> InMemorySecretStore {
         await #expect(throws: LLMError.signedOut) { try await llm.respond(request) }
     }
 
+    @Test func forgettingModelsFetchesThemAgain() async throws {
+        let models = StubTransport(json: planModels, planModels)
+        let llm = ChatGPTLLMClient(session: ChatGPTSession(store: storeWith(signedIn(at: start)), now: { start }),
+                                   openAI: OpenAIClient(transport: models, streamer: fakeResponses([], log: RequestLog())), now: { start })
+        _ = try await llm.models()
+        _ = try await llm.models()
+        await llm.forgetModels()
+        _ = try await llm.models()
+        #expect(models.requests.count == 2)
+    }
+
     @Test func otherFailuresAreUnavailable() async {
         let llm = client([(503, "busy", [:])], log: RequestLog())
         await #expect(throws: LLMError.self) { try await llm.respond(request) }

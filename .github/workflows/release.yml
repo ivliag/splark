@@ -1,0 +1,30 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        # Liquid Glass needs the macOS 26 SDK (Swift 6.2 or later); an older toolchain would quietly ship frosted glass.
+        run: |
+          swift --version
+          swift --version 2>&1 | grep -qE 'Swift version (6\.([2-9]|[1-9][0-9])|[7-9])' || { echo "Swift 6.2 or later is needed for Liquid Glass"; exit 1; }
+      - name: Test
+        run: swift test
+      - name: Build the zip
+        run: ./scripts/release.sh "$GITHUB_REF_NAME"
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" "build/Splark-$VERSION.zip" --draft --title "Splark $VERSION" --generate-notes \
+            --notes "Download Splark-$VERSION.zip, unzip it and move Splark to Applications. It isn't notarised yet: see the README's Install section for opening it the first time."

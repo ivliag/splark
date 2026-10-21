@@ -94,3 +94,21 @@ func slackProbeCommand() async throws {
         print("search.messages \(query): total=\(result.messages.total ?? -1) sample=\(result.messages.matches.map { $0.channel.name ?? $0.channel.id })")
     }
 }
+
+/// Whether a user token can see which channels are muted. Slack's own clients read it from `users.prefs.get` and
+/// `users.counts`; neither is in the public API. Prints each method's refusal and the scope Slack says it needs.
+/// (On Twain, Oct 2026: `users.prefs.get` needs `read`, a classic scope new apps can't request; the counts methods
+/// refuse user tokens. So muted channels can't be detected.)
+func slackMutedCommand() async throws {
+    struct Answer: Decodable { let ok: Bool; let error: String?; let needed: String? }
+    let (_, credentials) = try await devSlack()
+    let token = try await SlackTokenManager(credentials: credentials, store: store).accessToken()
+    for method in ["users.prefs.get", "users.counts", "client.counts"] {
+        var request = URLRequest(url: URL(string: "https://slack.com/api/\(method)")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let answer = try? JSONDecoder().decode(Answer.self, from: data)
+        print("\(method): ok=\(answer?.ok ?? false) error=\(answer?.error ?? "-") needed=\(answer?.needed ?? "-")")
+    }
+}

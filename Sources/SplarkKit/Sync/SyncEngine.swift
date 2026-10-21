@@ -14,6 +14,14 @@ public struct SyncStatus: Sendable, Equatable {
     public var missingScope = false   // "Reconnect to grant new permissions"; syncing goes on, so it outlives other problems
     public var progress = SyncSchedule.Progress(checked: 0, total: 0)   // "Catching up… 120 of 300 conversations"
     public var lastSuccess: Date?
+
+    public init(problem: SyncProblem? = nil, missingScope: Bool = false, progress: SyncSchedule.Progress = .init(checked: 0, total: 0),
+                lastSuccess: Date? = nil) {
+        self.problem = problem
+        self.missingScope = missingScope
+        self.progress = progress
+        self.lastSuccess = lastSuccess
+    }
 }
 
 /// Snapshots that appeared or changed, and ones that went away.
@@ -59,6 +67,7 @@ public actor SyncEngine {
         public var threadExpiry: TimeInterval = 86400         // thread items clear a day after their newest reply
         public var unreadHorizon: TimeInterval = 14 * 86400   // older unread messages are left out
         public var historyLimit = 40
+        public var repliesPageSize = 200                       // up to 5 pages: a thread's newest 1,000 replies
         public var contextCount = 3
         public var maxBackoff: TimeInterval = 300
         public var schedule = SyncSchedule.Intervals()
@@ -82,9 +91,11 @@ public actor SyncEngine {
     private let now: @Sendable () -> Date
     private var excluded: Set<String>
     private var schedule: SyncSchedule
-    private var inventory: [String: SlackConversation] = [:]
+    private var everything: [String: SlackConversation] = [:]   // every conversation the user is in, excluded or not
+    private var inventory: [String: SlackConversation] = [:]    // the ones Splark syncs
     private var inventoryDue = Date.distantPast
     private var readThrough: [String: String] = [:]   // marked read in Splark; Slack's last_read may lag behind
+    private var fingerprints: [ItemKey: [String]] = [:]   // the unread messages as last sent, so an edit counts as a change
     private var sweepDue = Date.distantPast
     private var inventoryLoaded = false
     private var sweptHits: [String: Date] = [:]        // "channel/ts" of search hits already handled, within the overlap
@@ -178,9 +189,13 @@ public actor SyncEngine {
         if case .offline? = status.problem { status.problem = .offline(retryAt: now) }
     }
 
+    /// Every conversation the user is in, excluded ones included (for the exclusions picker).
+    public var conversations: [SlackConversation] { everything.values.sorted { $0.id < $1.id } }
+
+    /// Takes effect at once both ways: a channel no longer excluded is due straight away.
     public func setExcluded(_ ids: Set<String>) -> SyncUpdate {
         excluded = ids
-        inventory = inventory.filter { !ids.contains($0.key) }
+        inventory = everything.filter { !ids.contains($0.key) }
         schedule.setInventory(inventory.mapValues(\.kind), now: now())
         var update = SyncUpdate()
         for key in snapshots.keys where ids.contains(key.channelId) { update.merge(removing(key)) }
@@ -213,8 +228,9 @@ public actor SyncEngine {
     // MARK: Inventory and conversations (spec §6.3 steps 1, 2 and 6)
 
     private func takeInventory(now: Date) async throws -> SyncUpdate {
-        let all = try await slack.allConversations().filter { !excluded.contains($0.id) && $0.isArchived != true }
-        inventory = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let all = try await slack.allConversations().filter { $0.isArchived != true }
+        everything = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        inventory = everything.filter { !excluded.contains($0.key) }
         schedule.setInventory(inventory.mapValues(\.kind), now: now)
         inventoryDue = now.addingTimeInterval(config.inventoryInterval)
         inventoryLoaded = true
@@ -248,14 +264,18 @@ public actor SyncEngine {
         let activity = SlackTS.latest(lastRead, fetched.first?.ts).map(SlackTS.date) ?? .distantPast
         schedule.checked(id, now: now, lastActivity: activity, hasUnread: !unread.isEmpty)
 
-        guard let first = unread.first, let newest = unread.last else { return removing(key) }
-        if let existing = snapshots[key], existing.newestTs == newest.ts, existing.unread.count == unread.count { return SyncUpdate() }
+        guard let first = unread.first else { return removing(key) }
+        if snapshots[key] != nil, fingerprints[key] == fingerprint(unread) { return SyncUpdate() }
         let context = try await slack.conversationsHistory(id, oldest: nil, latest: first.ts, inclusive: false, limit: config.contextCount)
             .messages.filter(isShown).sorted(by: oldestFirst)
         watchThreads(in: context, channelId: id, now: now)
+        // A never-opened DM asked for exactly its unread count, so Slack's has_more only means older, read history.
+        let moreUnread = neverOpenedDM ? (info.unreadCountDisplay ?? 0) > config.historyLimit : page?.hasMore ?? false
         let built = await snapshot(key, kind: kind(of: conversation), conversation: conversation,
-                                   unread: unread, context: context, moreUnread: page?.hasMore ?? false)
-        return isWanted(key, newest: built.newestTs) ? upserting(built) : removing(key)
+                                   unread: unread, context: context, moreUnread: moreUnread)
+        guard isWanted(key, newest: built.newestTs) else { return removing(key) }
+        fingerprints[key] = fingerprint(unread)
+        return upserting(built)
     }
 
     /// After a check's awaits: the user may have excluded the channel, marked it read or cleared its thread meanwhile.
@@ -298,7 +318,7 @@ public actor SyncEngine {
         var hasMore = false
         var oldest = watch.seenThrough
         for _ in 0..<5 {
-            let page = try await slack.conversationsReplies(watch.channelId, ts: watch.threadTs, oldest: oldest, limit: config.historyLimit)
+            let page = try await slack.conversationsReplies(watch.channelId, ts: watch.threadTs, oldest: oldest, limit: config.repliesPageSize)
             parent = parent ?? page.messages.first { $0.ts == watch.threadTs }
             let fresh = page.messages.filter { $0.ts != watch.threadTs && SlackTS.isAfter($0.ts, oldest) }
             fetched += fresh
@@ -320,13 +340,15 @@ public actor SyncEngine {
             memory.threads.clear(channelId: watch.channelId, threadTs: watch.threadTs, through: newest.ts)
             return removing(key)
         }
-        if let existing = snapshots[key], existing.newestTs == newest.ts, existing.unread.count == unread.count { return SyncUpdate() }
+        if snapshots[key] != nil, fingerprints[key] == fingerprint(unread) { return SyncUpdate() }
         if parent == nil {
             parent = try await slack.conversationsReplies(watch.channelId, ts: watch.threadTs, oldest: nil, limit: 1).messages.first { $0.ts == watch.threadTs }
         }
         let context = [parent].compactMap { $0 } + replies.filter { SlackTS.isAfter(first.ts, $0.ts) }.suffix(2)
         let built = await snapshot(key, kind: .thread, conversation: inventory[watch.channelId], unread: unread, context: context, moreUnread: hasMore)
-        return isWanted(key, newest: built.newestTs) ? upserting(built) : removing(key)
+        guard isWanted(key, newest: built.newestTs) else { return removing(key) }
+        fingerprints[key] = fingerprint(unread)
+        return upserting(built)
     }
 
     /// `search.messages` for mentions of the user, and for the user's own recent replies. Search indexes late, so each
@@ -389,6 +411,9 @@ public actor SyncEngine {
             return stop(.reauthorize)
         case SlackError.api("missing_scope"):
             status.missingScope = true
+            if case .conversation(let id) = job {   // counted as checked, so "Catching up…" can finish
+                schedule.checked(id, now: now, lastActivity: nil, hasUnread: false)
+            }
             postpone(job, until: now.addingTimeInterval(config.inventoryInterval))
         case SlackError.api(let code) where Self.goneErrors.contains(code):
             return forget(job)
@@ -456,7 +481,12 @@ public actor SyncEngine {
         return update
     }
 
+    private func fingerprint(_ messages: [SlackMessage]) -> [String] {
+        messages.map { "\($0.ts)|\($0.text ?? "")|\($0.files?.count ?? 0)" }
+    }
+
     private func removing(_ key: ItemKey) -> SyncUpdate {
+        fingerprints[key] = nil
         var update = SyncUpdate()
         if snapshots.removeValue(forKey: key) != nil { update.remove(key) }
         return update

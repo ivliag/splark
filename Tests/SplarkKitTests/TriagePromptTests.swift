@@ -103,6 +103,15 @@ func snapshot(_ channel: String, kind: SnapshotKind = .channel, title: String = 
         #expect(TriagePrompt.heuristic(snapshot("G1", kind: .groupDM, title: "a, b", unread: [(ts(-1), "Leo", "hi", false)])).anchorTs == ts(-1))
     }
 
+    @Test func textWithoutSpacesIsTrimmedToo() throws {
+        let long = String(repeating: "承認してください", count: 40)   // Japanese: no spaces, so word limits never trim it
+        let output = #"{"items":[{"conversation_id":"c1","level":"action","lead":"\#(long)","rest":"\#(long)","reason":"\#(long)","anchor_ts":""}]}"#
+        let item = try #require(try TriagePrompt.parse(output, ids: ["c1": dm.key], snapshots: [dm.key: dm])[dm.key]?.first)
+        #expect(item.lead.count <= 81 && item.rest.count <= 201 && item.reason.count <= 101)
+        let heuristic = TriagePrompt.heuristic(snapshot("D1", kind: .dm, title: "Marta", unread: [(ts(-1), "Marta", long, false)]))
+        #expect(heuristic.lead.count <= 81 && heuristic.rest.count <= 201)
+    }
+
     @Test func theSchemaIsStrict() throws {
         let schema = try #require(try JSONSerialization.jsonObject(with: Data(TriagePrompt.schemaJSON.utf8)) as? [String: Any])
         #expect(schema["additionalProperties"] as? Bool == false)

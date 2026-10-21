@@ -26,6 +26,11 @@ public struct SyncSchedule: Sendable {
         public let checked: Int
         public let total: Int
         public var isComplete: Bool { checked >= total }
+
+        public init(checked: Int, total: Int) {
+            self.checked = checked
+            self.total = total
+        }
     }
 
     public private(set) var entries: [String: Entry] = [:]

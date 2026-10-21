@@ -44,6 +44,8 @@ public struct InboxItem: Identifiable, Sendable, Equatable {
     public let reactions: [Reaction]
 
     public var newest: Date { SlackTS.date(newestTs) }
+    /// Channels and channel threads can be muted in Splark; DMs and group DMs can't.
+    public var canMute: Bool { kind == .channel || (kind == .thread && title.hasPrefix("#")) }
     public var replyPlaceholder: String { kind == .dm || kind == .groupDM ? "Message \(title)" : "Reply in thread" }
 }
 
@@ -111,6 +113,17 @@ public final class InboxStore {
 
     public func apply(_ results: [TriageResult]) {
         for result in results where snapshots[result.key] != nil { self.results[result.key] = result }
+        rebuild()
+    }
+
+    /// Reset Splark: nothing left to show.
+    public func clear() {
+        snapshots = [:]
+        results = [:]
+        excluded = [:]
+        hidden = [:]
+        repliedAt = [:]
+        reactions = [:]
         rebuild()
     }
 

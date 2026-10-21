@@ -19,8 +19,9 @@ public enum ActionError: Error, Equatable {
     case slack(String)
 }
 
-/// Shown as a toast (spec §9).
+/// Shown as a toast (spec §9). Each failure is its own value, so the same one twice still reaches the toast.
 public struct ActionFailure: Sendable, Equatable {
+    public let id = UUID()
     public let key: ItemKey
     public let message: String
 }
@@ -41,7 +42,10 @@ public enum DeepLink {
 /// Each shows at once and rolls back if Slack refuses.
 @MainActor @Observable
 public final class Actions {
-    public struct UndoToken: Hashable, Sendable { let id = UUID() }
+    public struct UndoToken: Hashable, Sendable {
+        let id = UUID()
+        public init() {}
+    }
 
     public private(set) var lastFailure: ActionFailure?
 

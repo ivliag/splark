@@ -53,6 +53,12 @@ public actor ChatGPTLLMClient: LLMClient {
 
     public func setModel(_ model: String?) { chosenModel = model }
 
+    /// After signing out: another account may offer other models.
+    public func forgetModels() {
+        available = nil
+        schemaRefused = []
+    }
+
     /// The plan's models, fetched once.
     public func models() async throws -> [String] {
         if let available { return available }

@@ -48,7 +48,7 @@ Success means:
 
 ### 4.1 Visual language
 
-- **Monochrome pixel art, low contrast.** No accent colours in Splark's own UI. Every icon is 1-bit pixel art drawn on a grid, rendered crisp (one grid pixel = one point, so two device pixels on Retina).
+- **Monochrome pixel art, quiet but readable.** No accent colours in Splark's own UI. Text keeps at least 7:1 contrast against the panel, secondary text 4.5:1 and the quietest text 3:1; on Liquid Glass the panel is tinted with its own colour so a dark or busy desktop doesn't wash it out. Every icon is 1-bit pixel art drawn on a grid, rendered crisp (one grid pixel = one point, so two device pixels on Retina).
 - **The soft spark** is an 11×11 four-point star:
 
   ```
@@ -77,10 +77,10 @@ Success means:
 
   | | Light | Dark |
   |---|---|---|
-  | Text | `#3a3a3e` | `#dcdce0` |
-  | Secondary text | `#7d7d83` | `#98989e` |
-  | Tertiary text | `#adadb3` | `#696970` |
-  | Spark | `#6a6a70` | `#b4b4ba` |
+  | Text | `#2e2e32` | `#e4e4e8` |
+  | Secondary text | `#626268` | `#a6a6ac` |
+  | Tertiary text | `#86868c` | `#7c7c83` |
+  | Spark | `#58585e` | `#b4b4ba` |
 
   Bold leads use weight 590. The panel uses Liquid Glass on macOS 26 and a frosted material on macOS 14–15.
 - **Pixel font:** a 5×7 font for initials and digits in setup and settings (workspace tiles, step numbers).
@@ -100,7 +100,7 @@ Success means:
 
 - **Colour:** the image is drawn as a template image, so macOS tints it correctly in light and dark menu bars.
 - **Clicks:**
-  - Left-click toggles the panel.
+  - Left-click toggles the panel. Until a workspace is connected it opens setup instead (or Settings → Slack while a workspace waits for an admin's approval): an empty panel would only say "All caught up".
   - Right-click (or ⌥-click, or ⌃-click for trackpads without a right click) opens a small menu: Refresh now, Settings…, Pause summaries, Quit.
 
 ### 4.3 Panel
@@ -115,12 +115,12 @@ The layout is the prototype's activity-log style.
   - **Meta line:** `time · source`, where source is the DM partner's name, `#channel`, or `thread in #channel`. The workspace name is appended only for workspaces other than the first one connected.
   - **Summary:** a bold lead (up to ~8 words) then the rest (up to ~20 words), clamped to 2 lines.
   - **Hover:**
-    - A toolbar replaces the meta line: Reply, 👀, ✅, 👍, Open in Slack.
+    - A toolbar joins the meta line, which shortens to `time · #channel` or `time · name` beside it so where the item came from stays visible: Reply, 👀, ✅, 👍, Open in Slack, and Mute for a channel or channel thread.
     - A separate ✓ circle at the right edge marks the conversation as read in Slack.
   - **Click to expand:**
     - The original unread messages (author · time, then text; up to the last 10, with "and N earlier" above).
     - A reply field: "Reply in thread" for channels and threads, "Message <name>" for DMs. Enter sends, Esc collapses.
-    - Reactions and Open in Slack underneath.
+    - Reactions and Open in Slack underneath, and for a channel or channel thread **Mute** (its tooltip names the channel): Splark leaves the channel out from then on, with Undo for 4 seconds. Slack doesn't tell apps which channels are muted there (`users.prefs.get` needs the classic `read` scope), so Splark keeps its own list.
 - **Just comments:** a single collapsed line at the bottom, "Just comments · N conversations".
   - Expanding it shows the same rows with dimmed sparks.
   - Hovering it shows ✓✓ mark all read.
@@ -137,7 +137,7 @@ The layout is the prototype's activity-log style.
 
 ### 4.4 Setup (first run)
 
-A single window with four steps, shown as four sparks in the title bar (bright = current, brighter = done, dimmed = upcoming). Copy and states are as in `setup.html`.
+A single window with four steps, shown as four pixel dots in the title bar (solid = current, outlined = done, faint = upcoming). Copy and states are as in `setup.html`.
 
 1. **Welcome.** App icon, tagline "Slack, sorted by what needs you.", and three points: ranking, quick actions, privacy.
 2. **Connect Slack.** Repeat for each workspace.
@@ -154,16 +154,16 @@ A single window with four steps, shown as four sparks in the title bar (bright =
 
 ### 4.5 Settings
 
-One small window with four sections, as tabs in its title bar, in setup's look.
+One small window with four sections, as tabs in its title bar in this order: About, General, Slack, OpenAI. It opens on General. It has setup's look.
 
-- **Workspaces:**
-  - A list with status (Connected / Waiting for approval / Token revoked) and the last sync time. One line below the list says whether Slack's Dock badge can be read: it belongs to the Slack app, not to a workspace.
+- **About:** version, licence, a link to the repo, and credits (Doll).
+- **General:** Open at login, Show count, and Reset Splark (clears all data).
+- **Slack:**
+  - The workspaces, with status (Connected / Waiting for approval / Token revoked) and the last sync time. One line below the list says whether Slack's Dock badge can be read: it belongs to the Slack app, not to a workspace.
   - Add (setup's Slack step on its own), Finish connecting, Reconnect, and Remove (which deletes the token from Keychain and tells the user how to delete the private Slack app). Remove and Reset ask first, inline.
   - A workspace connected with a pasted token has no app to Allow again: when its token stops working, it offers "Paste new token" instead of Reconnect.
-  - Per-workspace excluded channels (a picker).
-- **ChatGPT:** the account and plan, a model picker (from `GET /v1/models`, with a recommended default), Sign out, and Pause summaries.
-- **General:** Open at login, Show count, and Reset Splark (clears all data).
-- **About:** version, licence, a link to the repo, and credits (Doll).
+  - Per-workspace muted channels (a picker): the same list the panel's Mute adds to.
+- **OpenAI:** the ChatGPT account and plan, a model picker (from `GET /v1/models`, with a recommended default), Sign out, and Pause summaries.
 
 ## 5. Architecture
 

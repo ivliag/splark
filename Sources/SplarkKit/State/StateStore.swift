@@ -63,6 +63,12 @@ public struct StateStore: Sendable {
         return SavedState()
     }
 
+    /// Reset Splark. A missing file is fine.
+    public func delete() throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
+
     /// Atomic, and readable only by the user.
     public func save(_ state: SavedState) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
