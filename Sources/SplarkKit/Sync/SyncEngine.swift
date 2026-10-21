@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// What the user needs to know about a workspace's sync (spec §6.3 step 7, §9).
 public enum SyncProblem: Sendable, Equatable {
@@ -14,10 +15,13 @@ public struct SyncStatus: Sendable, Equatable {
     public var missingScope = false   // "Reconnect to grant new permissions"; syncing goes on, so it outlives other problems
     public var progress = SyncSchedule.Progress(checked: 0, total: 0)   // "Catching up… 120 of 300 conversations"
     public var lastSuccess: Date?
+    /// Why syncing stopped, for Settings and the system log: "Slack said invalid_refresh_token". Never message text.
+    public var reason: String?
 
     public init(problem: SyncProblem? = nil, missingScope: Bool = false, progress: SyncSchedule.Progress = .init(checked: 0, total: 0),
-                lastSuccess: Date? = nil) {
+                lastSuccess: Date? = nil, reason: String? = nil) {
         self.problem = problem
+        self.reason = reason
         self.missingScope = missingScope
         self.progress = progress
         self.lastSuccess = lastSuccess
@@ -406,9 +410,9 @@ public actor SyncEngine {
     private func handle(_ error: Error, job: Job, now: Date) -> SyncUpdate {
         switch error {
         case SlackError.api(let code) where Self.revokedErrors.contains(code):
-            return stop(.tokenRevoked)
-        case SlackError.refreshFailed:
-            return stop(.reauthorize)
+            return stop(.tokenRevoked, reason: "Slack said \(code)")
+        case SlackError.refreshFailed(let code):
+            return stop(.reauthorize, reason: "Slack said \(code)")
         case SlackError.api("missing_scope"):
             status.missingScope = true
             if case .conversation(let id) = job {   // counted as checked, so "Catching up…" can finish
@@ -436,8 +440,10 @@ public actor SyncEngine {
         status.problem = .offline(retryAt: now.addingTimeInterval(delay))
     }
 
-    private func stop(_ problem: SyncProblem) -> SyncUpdate {
+    private func stop(_ problem: SyncProblem, reason: String) -> SyncUpdate {
         status.problem = problem
+        status.reason = reason
+        Logger.sync.error("\(self.workspace.name, privacy: .public) stopped syncing: \(reason, privacy: .public)")
         var update = SyncUpdate()
         for key in snapshots.keys { update.merge(removing(key)) }
         return update
@@ -503,4 +509,10 @@ public actor SyncEngine {
         case .privateChannel, .publicChannel: .channel
         }
     }
+}
+
+extension Logger {
+    /// Why a workspace stopped syncing, in the system log (`log show --predicate 'subsystem == "dev.splark.Splark"'`).
+    /// Error codes and workspace names only, never message text or tokens.
+    static let sync = Logger(subsystem: "dev.splark.Splark", category: "sync")
 }

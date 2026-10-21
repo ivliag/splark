@@ -130,5 +130,24 @@ let community = Workspace(teamId: "T2", name: "Lumen Community", userId: "U9", u
         #expect(Presenter.workspaceStatus(lumen, sync: SyncStatus(problem: .reauthorize), now: now).title == "Reconnect needed")
         #expect(Presenter.workspaceStatus(community, sync: SyncStatus(problem: .reauthorize), now: now).title == "Token expired")
         #expect(Presenter.workspaceStatus(lumen, sync: SyncStatus(problem: .offline(retryAt: now)), now: now).title == "Offline")
+        var refused = SyncStatus(problem: .reauthorize, reason: "Slack said invalid_refresh_token")
+        refused.lastSuccess = ago(7200)
+        #expect(Presenter.workspaceStatus(lumen, sync: refused, now: now).detail == "Slack said invalid_refresh_token · Synced 2h ago")
+    }
+
+    /// A workspace that stopped syncing isn't "All caught up": nothing new from it can show until it's reconnected. Two days
+    /// of unread Slack sat behind "All caught up" and "Nothing unread in Slack." (live run).
+    @Test func aStoppedWorkspaceIsNotAllCaughtUp() {
+        let status = Presenter.headerStatus(workspaces: [lumen], sync: ["T1": SyncStatus(problem: .tokenRevoked)], triage: .idle, now: now)
+        #expect(status?.text == "Lumen needs reconnecting in Settings")
+        let empty = InboxSummary(needYou: 0, spark: .dimmed, headline: "All caught up", comments: 0)
+        let calm = InboxSummary(needYou: 0, spark: .dimmed, headline: "Nothing needs you", comments: 2)
+        let busy = InboxSummary(needYou: 3, spark: .bright, headline: "3 need you", comments: 0)
+        #expect(Presenter.headline(empty, status: status) == "Splark isn't checking Lumen")
+        #expect(Presenter.headline(calm, status: status) == "Splark isn't checking Lumen")
+        #expect(Presenter.headline(busy, status: status) == "3 need you")
+        #expect(Presenter.emptyText(status) == "New messages from Lumen will show here once it's reconnected.")
+        let offline = Presenter.headerStatus(workspaces: [lumen], sync: ["T1": SyncStatus(problem: .offline(retryAt: now))], triage: .idle, now: now)
+        #expect(Presenter.headline(empty, status: offline) == "All caught up" && Presenter.emptyText(offline) == "Nothing unread in Slack.")
     }
 }

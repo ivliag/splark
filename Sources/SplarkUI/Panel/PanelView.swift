@@ -60,7 +60,7 @@ public struct PanelView: View {
     private func header(_ palette: Palette) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(inbox.summary.headline).font(Theme.font(13, .semibold)).foregroundStyle(palette.text)
+                Text(Presenter.headline(inbox.summary, status: status)).font(Theme.font(13, .semibold)).foregroundStyle(palette.text)
                 if let status {
                     HStack(spacing: 6) {
                         if status.working { CyclingSpark().foregroundStyle(palette.tertiary) }
@@ -138,7 +138,8 @@ public struct PanelView: View {
     private func empty(_ palette: Palette) -> some View {
         VStack(spacing: 10) {
             SparkView(level: .dimmed).foregroundStyle(palette.spark)
-            Text("Nothing unread in Slack.").font(Theme.font(13)).foregroundStyle(palette.secondary)
+            Text(Presenter.emptyText(status)).font(Theme.font(13)).foregroundStyle(palette.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(EdgeInsets(top: 28, leading: 20, bottom: 30, trailing: 20))

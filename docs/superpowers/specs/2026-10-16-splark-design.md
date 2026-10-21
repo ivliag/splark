@@ -108,6 +108,7 @@ Success means:
 The layout is the prototype's activity-log style.
 
 - **Header:** "N need you", "Nothing needs you" or "All caught up".
+  - When nothing needs the user and a workspace has stopped syncing (its token refused or revoked), the header says "Splark isn't checking <workspace>" instead, the second line says to reconnect it in Settings, and the empty panel says new messages from it will show once it's reconnected. "All caught up" would be untrue: nothing new from it can arrive.
   - Open Slack and Settings buttons appear on hover.
   - A second line appears only while working, with a cycling spark: "Catching up… 120 of 300 conversations", "Summarising 3 conversations", "Summaries paused: ChatGPT usage limit, back at 15:40".
 - **Rows**, for needs-action and question items, sorted by level, then directness (DM or @mention first), then newest first:
@@ -241,7 +242,8 @@ The user's app is created with `apps.manifest.create`, using the pasted app conf
   Slack issues **rotating** user tokens to PKCE apps, even with `token_rotation_enabled: false` (measured 2026-10-16, see `docs/spikes.md`). The token starts `xoxe.xoxp-` and expires after 12 hours.
   - Splark refreshes it with `oauth.v2.access grant_type=refresh_token`, `client_id` and the refresh token, and **no client secret** (verified live). The client secret is never stored.
   - **When:** within 30 minutes of expiry, or after a `token_expired` error.
-  - **Each refresh returns a new refresh token.** Both tokens are saved to the Keychain before the new access token is used.
+  - **Each refresh returns a new refresh token,** and Slack stops accepting the old one. Both tokens are saved to the Keychain before the new access token is used. If the Keychain can't take them (locked, or refusing a new build), Splark keeps using the new tokens and saves them at the next chance: dropping them would leave only the spent refresh token, and the next refresh would be refused.
+  - **Why a workspace stopped** (Slack's error code, or a Keychain that couldn't be read at launch) shows in Settings beside its status and goes to the system log, subsystem `dev.splark.Splark`. Never message text or tokens.
   - **When a refresh fails** with `invalid_refresh_token` (for example after 30 idle days), the workspace shows "Reconnect", and the user re-authorises the same app (Allow only, no new setup token).
 - **Why these scopes:** history and read scopes find unread messages. `users:read` gives names. `search:read` powers the mention sweep. `chat:write` and `reactions:write` are for replies and reactions. The `*:write` conversation scopes exist only for `conversations.mark` (mark as read). They also permit channel management, and the README says so plainly. Splark never calls those methods.
 - **Manual fallback:** a "create from manifest" link, `https://api.slack.com/apps?new_app=1&manifest_json=<urlencoded>`, using the same manifest without the redirect or PKCE fields. The user clicks *Install to Workspace* and pastes the *User OAuth Token*.

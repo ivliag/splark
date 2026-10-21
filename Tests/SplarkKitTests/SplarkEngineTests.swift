@@ -136,6 +136,7 @@ final class HeldLLM: LLMClient, @unchecked Sendable {
         let splark = try engine(withToken: false)
         splark.start()
         #expect(splark.syncStatus["T1"]?.problem == .reauthorize)
+        #expect(splark.syncStatus["T1"]?.reason == "No saved token in the Keychain")
         await splark.stop()
     }
 

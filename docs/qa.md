@@ -60,4 +60,5 @@ Go through this on a real Mac before tagging a release: macOS 26 for Liquid Glas
 
 - [ ] Quit from the menu, then reopen: no setup, the workspaces reconnect, and the spark comes back within a minute.
 - [ ] Install a newer build over it: macOS asks for Keychain access once per item. **Always Allow**, and everything works as before.
-- [ ] Leave it running overnight: Slack tokens refresh (every 12 hours), and nothing asks to reconnect.
+- [ ] Leave it running overnight: Slack tokens refresh (every 12 hours), and nothing asks to reconnect. If something does, `log show --predicate 'subsystem == "dev.splark.Splark"' --last 1d` says why.
+- [ ] With a workspace that needs reconnecting and nothing else to show, the panel says "Splark isn't checking <workspace>", not "All caught up".

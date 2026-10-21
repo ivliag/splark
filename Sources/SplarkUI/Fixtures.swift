@@ -114,6 +114,7 @@ import SwiftUI
             return m
         }
         let catching = HeaderStatus(text: "Catching up… 120 of 300 conversations", working: true)
+        let stopped = HeaderStatus(text: "Lumen needs reconnecting in Settings", working: false, stopped: "Lumen")
         return [
             ("panel", AnyView(PanelView(inbox: inbox, status: nil, model: model(), now: Fixtures.now, layout: .snapshot))),
             ("panel-hover", AnyView(PanelView(inbox: inbox, status: nil, model: model(), now: Fixtures.now, forceHover: items[2].id))),   // a thread in a channel: the widest toolbar, with Mute
@@ -121,6 +122,7 @@ import SwiftUI
             ("panel-comments", AnyView(PanelView(inbox: inbox, status: catching, model: model(comments: true), now: Fixtures.now, layout: .snapshot))),
             ("panel-toast", AnyView(PanelView(inbox: inbox, status: nil, model: model(toast: true), now: Fixtures.now, layout: .snapshot))),
             ("panel-empty", AnyView(PanelView(inbox: Fixtures.emptyInbox(), status: nil, model: model(), now: Fixtures.now, layout: .snapshot))),
+            ("panel-stopped", AnyView(PanelView(inbox: Fixtures.emptyInbox(), status: stopped, model: model(), now: Fixtures.now, layout: .snapshot))),
         ]
     }
 }

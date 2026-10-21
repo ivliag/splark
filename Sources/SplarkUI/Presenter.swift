@@ -5,6 +5,13 @@ import SplarkKit
 public struct HeaderStatus: Equatable, Sendable {
     public let text: String
     public let working: Bool   // shows the cycling spark
+    public var stopped: String? = nil   // a workspace that stopped syncing: nothing new from it can show
+
+    public init(text: String, working: Bool, stopped: String? = nil) {
+        self.text = text
+        self.working = working
+        self.stopped = stopped
+    }
 }
 
 /// What the menu-bar item shows (spec §4.2).
@@ -60,9 +67,9 @@ public enum Presenter {
         }
         if let (workspace, status) = statuses.first(where: { $0.1.problem?.stopsSync == true }) {
             if status.problem == .reauthorize, workspace.redirectPort == nil {
-                return HeaderStatus(text: "\(workspace.name)'s token stopped working: paste a new one in Settings", working: false)
+                return HeaderStatus(text: "\(workspace.name)'s token stopped working: paste a new one in Settings", working: false, stopped: workspace.name)
             }
-            return HeaderStatus(text: "\(workspace.name) needs reconnecting in Settings", working: false)
+            return HeaderStatus(text: "\(workspace.name) needs reconnecting in Settings", working: false, stopped: workspace.name)
         }
         let checked = statuses.reduce(0) { $0 + $1.1.progress.checked }, total = statuses.reduce(0) { $0 + $1.1.progress.total }
         if total > 0, checked < total {
@@ -85,13 +92,26 @@ public enum Presenter {
         return nil
     }
 
+    /// The panel's bold first line. With nothing needing the user and a workspace stopped, that comes first: "All caught
+    /// up" there hid days of unread Slack (live run).
+    public static func headline(_ summary: InboxSummary, status: HeaderStatus?) -> String {
+        guard summary.needYou == 0, let stopped = status?.stopped else { return summary.headline }
+        return "Splark isn't checking \(stopped)"
+    }
+
+    /// Under the header when nothing is listed.
+    public static func emptyText(_ status: HeaderStatus?) -> String {
+        status?.stopped.map { "New messages from \($0) will show here once it's reconnected." } ?? "Nothing unread in Slack."
+    }
+
     public static func statusItem(_ summary: InboxSummary, showCount: Bool) -> StatusItemContent {
         StatusItemContent(level: summary.spark, count: showCount && summary.needYou > 0 ? String(summary.needYou) : nil,
                           accessibility: "Splark: \(summary.headline)")
     }
 
     public static func workspaceStatus(_ workspace: Workspace, sync: SyncStatus?, now: Date) -> WorkspaceStatusText {
-        let detail = sync?.lastSuccess.map { "Synced \(shortTime($0, now: now) == "now" ? "just now" : shortTime($0, now: now) + " ago")" } ?? "Not synced yet"
+        let synced = sync?.lastSuccess.map { "Synced \(shortTime($0, now: now) == "now" ? "just now" : shortTime($0, now: now) + " ago")" } ?? "Not synced yet"
+        let detail = [sync?.problem?.stopsSync == true ? sync?.reason : nil, synced].compactMap { $0 }.joined(separator: " · ")
         switch sync?.problem {
         case .tokenRevoked?: return WorkspaceStatusText(title: "Token revoked", detail: detail)
         case .reauthorize?: return WorkspaceStatusText(title: workspace.redirectPort == nil ? "Token expired" : "Reconnect needed", detail: detail)

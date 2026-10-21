@@ -182,6 +182,7 @@ extension SyncEngine {
         clock.advance(61)
         #expect(await engine.runUntilIdle().removed == [c1])
         #expect(await engine.status.problem == .tokenRevoked)
+        #expect(await engine.status.reason == "Slack said token_revoked")   // kept, logged and shown in Settings
         let step = await engine.step()
         #expect(!step.didWork && step.nextWake == nil)
     }
@@ -192,6 +193,7 @@ extension SyncEngine {
         let engine = makeEngine(slack, clock)
         _ = await engine.runUntilIdle()
         #expect(await engine.status.problem == .reauthorize)
+        #expect(await engine.status.reason == "Slack said invalid_refresh_token")
     }
 
     @Test func aMissingScopeIsReportedButSyncingGoesOn() async {

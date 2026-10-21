@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import os
 
 /// What `SplarkEngine` runs on. `live()` is the real thing; tests swap Slack, the AI, the clock and storage.
 public struct EngineEnvironment: Sendable {
@@ -382,9 +383,14 @@ public final class SplarkEngine {
 
     private func launch(_ workspace: Workspace) {
         let team = workspace.teamId
-        guard let credentials = try? SlackCredentials.load(teamId: team, from: environment.secrets) else {
-            syncStatus[team] = SyncStatus(problem: .reauthorize)
-            return
+        let credentials: SlackCredentials
+        do {
+            guard let saved = try SlackCredentials.load(teamId: team, from: environment.secrets) else {
+                return cannotStart(workspace, reason: "No saved token in the Keychain")
+            }
+            credentials = saved
+        } catch {
+            return cannotStart(workspace, reason: "Splark couldn't read its Keychain (\(error))")
         }
         let slack = environment.slack(credentials)
         let names = UserDirectory(now: environment.now, entries: state.userNames[team] ?? [:]) { try await slack.usersInfo($0) }
@@ -392,6 +398,11 @@ public final class SplarkEngine {
                                 excluded: Set(state.excludedChannels[team] ?? []), config: environment.sync, now: environment.now)
         registry.running[team] = Running(workspace: workspace, slack: slack, engine: engine, names: names)
         registry.running[team]?.loop = Task { [weak self] in await self?.runSync(team) }
+    }
+
+    private func cannotStart(_ workspace: Workspace, reason: String) {
+        syncStatus[workspace.teamId] = SyncStatus(problem: .reauthorize, reason: reason)
+        Logger.sync.error("\(workspace.name, privacy: .public) can't sync: \(reason, privacy: .public)")
     }
 
     /// Stops one workspace's loop and drops its items, keeping what it learned.
